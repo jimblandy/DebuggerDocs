@@ -1,0 +1,737 @@
+<i>This draft is being discussed in [https://bugzilla.mozilla.org/show_bug.cgi?id=636907 bug 636907]. The interface it describes is not stable.</i>
+
+The <code>Debugger</code> constructor makes objects with methods for debugging code running in other compartments. Given a <code>Debugger</code> instance <i>d</i>, you can:
+<ul>
+<li>add debuggee compartments to <i>d</i>'s purview by calling <code><i>d</i>.addDebuggee</code>;
+<li>request notification of basic debugging events by assigning a handler object to <code><i>d</i>.hooks</code>;
+<li>set breakpoints by obtaining a <code>Debugger.Script</code> instance and calling its <code>setBreakpoint</code> method;
+<li>set watchpoints on objects and their properties;
+<li>examine the debuggee's stack frames and lexical enviroments;
+<li>inspect and manipulate its objects;
+</ul>
+and so on.
+
+Your event handling methods run in the same thread as the debuggee, on the same JavaScript stack: when the event occurs, the debuggee pauses while your handler methods run, and resumes (unless you say otherwise) when your methods return. Your event handling methods run in the debugger's compartment. SpiderMonkey mediates their access to the debuggee's objects, and prevents the debuggee from accessing the debugger's objects at all.
+
+The Debugger object provides various sorts of objects representing the debuggee's state, which the debugger code can examine and manipulate:
+<ul>
+<li><code>Debugger.Object</code> instances represent objects in the debuggee.
+<li><code>Debugger.Frame</code> instances represent debuggee stack frames.
+<li><code>Debugger.Script</code> instances represent the debuggee's code, whether it is a function body, code passed to <code>eval</code>, or a top-level script.
+<li><code>Debugger.Environment</code> instances represent the variable environments in effect at different points in the debuggee's code.
+</ul>
+
+A <code>Debugger</code> instance can only debug code running in other compartments, and you may not create cycles of debugger/debuggee compartments.
+
+The <code>Debugger</code> interface does not support cross-thread or multi-threaded debugging. As a general rule, only one thread may use a compartment at a time. When one compartment is debugging another, arbitrary events in the debuggee compartment may cause code to run in the debugger compartment; conversely, a call to any method in this interface could cause the debugger to try interact with the debuggee compartment. Thus, as a general rule, you should never permit different threads to run in the debugger and debuggee compartments simultaneously.
+
+== General Conventions ==
+
+=== Properties ===
+
+Properties of objects the <code>Debugger</code> interface creates, and those of the interface objects themselves, follow some general conventions:
+<ul>
+<li>Instances and prototypes are extensible; you can add your own properties and methods to them.
+<li>Properties are configurable. This applies to both "own" and prototype properties, and to both methods and data properties. (Leaving these properties open to redefinition will hopefully make it easier for JavaScript debugger code to cope with bugs, bug fixes, and changes in the interface over time.)
+<li>Method properties are writable.
+<li>We prefer inherited accessor properties to own data properties. Both are read using the same syntax, but inherited accessors seem like a more accurate reflection of what's going on. Unless otherwise noted, these properties have getters but no setters, as they cannot meaningfully be assigned to.
+</ul>
+
+=== Debuggee Values ===
+
+The <code>Debugger</code> interface follows some conventions to help debuggers safely inspect and modify the debuggee's objects and values. Primitive values are passed freely between debugger and debuggee; copying or wrapping is handled transparently. Objects received from the debuggee (including host objects like DOM elements) are fronted in the debugger by <code>Debugger.Object</code> instances, which provide reflection-oriented methods for inspecting their referents; see <code>Debugger.Object</code>, below.
+
+Of the debugger's objects, only <code>Debugger.Object</code> instances may be passed to the debuggee: when this occurs, the debuggee receives the <code>Debugger.Object</code>'s referent, not the <code>Debugger.Object</code> instance itself.
+
+In the descriptions below, the term "debuggee value" means either a primitive value or a <code>Debugger.Object</code> instance; it is a value that might be received from the debuggee, or that could be passed to the debuggee.
+
+=== Completion Values ===
+
+When a debuggee stack frame completes its execution, or when some sort of debuggee call initiated by the debugger finishes, the <code>Debugger</code> interface provides a value describing how the code completed; these are called <i>completion values</i>. A completion value has one of the following forms:
+<dl>
+<dt>{ return: <i>value</i> }
+<dd>The code completed normally, returning <i>value</i>. <i>Value</i> is a debuggee value.
+<dt>{ yield: <i>value</i> }
+<dd>The running code is a generator frame which has yielded <i>value</i>. <i>Value</i> is a debuggee value.
+<dt>{ throw: <i>value</i> }
+<dd>The code threw <i>value</i> as an exception. <i>Value</i> is a debuggee value.
+<dt>null
+<dd>The code was terminated, as if by the "slow script" dialog box.
+</dl>
+
+If control reaches the end of a generator frame, the completion value is <code>{throw: <i>stop</i>}</code> where ''stop'' is a <code>Debugger.Object</code> object representing the <code>StopIteration</code> object being thrown.
+
+=== Resumption Values ===
+
+As the debuggee runs, the <code>Debugger</code> interface calls various debugger-provided handler functions to report the debuggee's behavior. Some of these calls can return a value indicating how the debuggee's execution should continue; these are called <i>resumption values</i>. A resumption value has one of the following forms:
+<dl>
+<dt>undefined
+<dd>The debuggee should continue execution normally.
+<dt>{ return: <i>value</i> }
+<dd>Return <i>value</i> immediately as the current value of the function. <i>Value</i> must be a debuggee value. (Most handler functions support this, except those whose descriptions say otherwise.) If the function was called as a constructor (that is, via a <code>new</code> expression), then <i>value</i> serves as the value returned by the function's body, not that produced by the <code>new</code> expression: if the value is not an object, the <code>new</code> expression returns the frame's <code>this</code> value.
+<dt>{ yield: <i>value</i> }
+<dd>Yield <i>value</i> immediately as the next value of the current frame, which must be a generator frame. <i>Value</i> is a debuggee value. The current frame must be a generator frame that has not yet completed in some other way. You may use <code>yield</code> resumption values to substitute a new value or one already yielded by a generator, or to make a generator yield additional values.
+<dt>{ throw: <i>value</i> }
+<dd>Throw <i>value</i> as an execption from the current bytecode instruction. <i>Value</i> must be a debuggee value.
+<dt>null
+<dd>Terminate the debuggee, as if it had been cancelled by the "slow script" dialog box.
+</dl>
+
+If a function that would normally return a resumption value to indicate how the debuggee should continue instead throws an exception, we never propagate such an exception to the debuggee; instead, we call the associated <code>Debugger</code> instance's <code>uncaughtExceptionHook</code> property, as described below.
+
+=== The Debugger.DebuggeeWouldRun Exception ===
+
+Some debugger operations that appear to simply inspect the debuggee's state would actually cause the debuggee to execute code. For example, reading a variable could run a getter on the global or a <code>with</code> expression operand, and getting an object's property descriptor could run a handler trap if the object is a proxy. To protect the debugger's integrity, only operations whose stated purpose is to run debuggee code can do so; these are called [[#Invocation_functions|invocation functions]], and follow certain common conventions to report the debuggee's behavior safely. Any other operation that would run debuggee code throws an instance of the <code>Debugger.DebuggeeWouldRun</code> exception.
+
+=== Invocation functions ===
+
+An <i>invocation function</i> is any function in this interface that allows the debugger to invoke code in the debuggee: <code>Debugger.Object.prototype.call</code>, <code>Debugger.Frame.prototype.eval</code>, and so on.
+
+While invocation functions differ in the code to be run and how to pass values to it, they all follow this general procedure:
+
+<ol>
+<li>Let <i>older</i> be the youngest debuggee frame on the stack, or null if there is no such frame. (This is never one of the the debugger's own frames; those never appear as <code>Debugger.Frame</code> instances.)
+<li>Push a <code>"debugger"</code> frame on the stack, with <i>older</i> as its <code>older</code> property.
+<li>Invoke the debuggee code as appropriate for the given invocation function, with the <code>"debugger"</code> frame as its continuation. For example, <code>Debugger.Frame.prototype.eval</code> pushes an <code>"eval"</code> frame for code it runs, whereas <code>Debugger.Object.prototype.call</code> pushes a <code>"call"</code> frame.
+<li>When the debuggee code completes, whether by returning, throwing an exception or being terminated, pop the <code>"debugger"</code> frame, and return an appropriate [[#Completion_Values|completion value]] from the invocation function to the debugger.
+</ol>
+
+== The Debugger Object ==
+
+When called as a constructor, the <code>Debugger</code> object creates a new <code>Debugger</code> instance.
+
+<dl>
+<dt>new Debugger([<i>global</i>, ...])
+<dd>Create a debugger object, and apply its <code>addDebuggee</code> method to each of the given <i>global</i> objects to add their compartments as initial debuggees.
+</dl>
+
+=== Accessor Properties of the Debugger Prototype Object ===
+
+A <code>Debugger</code> instance inherits the following accessor properties from its prototype:
+
+<dl>
+<dt>enabled
+<dd>A boolean value indicating whether this <code>Debugger</code> instance's hooks, breakpoints, and watchpoints are currently enabled. It is an accessor property with a getter and setter: assigning to it enables or disables this <code>Debugger</code> instance; reading it produces true if the instance is enabled, or false otherwise. This property is initially <code>true</code> in a freshly created <code>Debugger</code> instance.
+
+This property gives debugger code a single point of control for disentangling itself from the debuggee, regardless of what sort of events or hooks or "points" we add to the interface. 
+
+<dt>uncaughtExceptionHook
+<dd>Either <code>null</code> or a function that SpiderMonkey calls when a call to a debug event hook, breakpoint handler, watchpoint handler, or similar function throws some exception, <i>debugger-exception</i>. Exceptions thrown in the debugger are not propagated to user code; instead, SpiderMonkey calls this function, passing <i>debugger-exception</i> as its sole argument and the <code>Debugger</code> instance as the <code>this</code> value. This function should return a [[#Resumption_Values|resumption value]], which determines how the debuggee should continue. If the uncaught exception hook itself throws an exception, <i>uncaught-hook-exception</i>, SpiderMonkey throws an exception <i>confess-to-debuggee-exception</i> to the debuggee whose message blames the debugger, and includes textual descriptions of <i>uncaught-hook-exception</i> and <i>debugger-exception</i>. If this property's value is <code>null</code>, SpiderMonkey throws an exception to the debuggee whose message blames the debugger, and includes a textual description of <i>debugger-exception</i>.
+
+Assigning anything other than a callable value or <code>null</code> to this property throws a <code>TypeError</code> exception.
+
+(The hope here is that some sort of backstop, even if imperfect, will make life easier for debugger developers, especially since an uncaughtExceptionHook has access to browser-level features like <code>alert</code>, which this API's implementation does not.)
+</dl>
+
+
+=== Debugging hooks ===
+
+A <code>Debugger</code> instance has methods that are automatically called by the JS engine under the circumstances described below.
+
+<dl>
+<dt>onNewScript(<i>script</i>, [<i>function</i>])
+<dd>New code, represented by the <code>Debugger.Script</code> instance <i>script</i>, has been loaded into a debuggee compartment. If the new code is part of a function, <i>function</i> is a <code>Debugger.Object</code> reference to the function object. (Not all code is part of a function; for example, the code appearing in a <code>&lt;script&gt;</code> tag that is outside of any functions defined in that tag would be passed to <code>onNewScript</code> without an accompanying <i>function</i> argument.)
+
+Note that <i>script</i> may be a temporary script, created for a call to <i>eval</i> and destroyed when its execution is complete.
+
+This method's return value is ignored.
+
+<dt>onDebuggerStatement(<i>frame</i>)
+<dd>The debuggee has executed a <i>debugger</i> statement in <i>frame</i>. This method should return a [[#Resumption_Values|resumption value]] specifying how the debuggee's execution should proceed.
+
+<dt>onEnterFrame(<i>frame</i>)
+<dd>The stack frame <i>frame</i> is about to begin executing code. (Naturally, <i>frame</i> is currently the youngest debuggee frame.) This method should return a [[#Resumption_Values|resumption value]] specifying how the debuggee's execution should proceed.
+
+<dt>onThrow(<i>frame</i>, <i>value</i>)
+<dd>The exception <i>value</i> is being thrown in the debuggee. <i>frame</i> is current newest frame, the one triggering the exception. This method should return a [[#Resumption_Values|resumption value]] specifying how the debuggee's execution should proceed. If it returns <code>undefined</code>, the exception is thrown as normal.
+
+''(pending discussion)'' If the debuggee executes <code>try { throw 0; } finally { f(); }</code> and <code>f()</code> executes without error, the <code>onThrow</code> hook is called only once. The debugger is not notified when the exception is set aside in order to execute the <code>finally</code> block, nor when it is restored after the <code>finally</code> block completes normally.
+
+A call to the <code>onThrow</code> hook is typically followed by one or more calls to the <code>onExceptionUnwind</code> hook.
+
+''(An alternative design here would be:  onException(status, frame, value) where status is one of the strings "throw", "unwind", "catch", "finally", "rethrow". JS_SaveExceptionState would trigger a "finally" event, JS_RestoreExceptionState would trigger a "rethrow", JS_ClearPendingException would trigger a "catch"; not sure what JS_DropExceptionState or a return/throw from a finally block should do.)''
+
+<dt>onExceptionUnwind(<i>frame</i>, <i>value</i>)
+<dd>The exception <i>value</i> has been thrown. Stack unwinding is underway. Some frames may already have been removed; <i>frame</i> is the most recent remaining stack frame. This method should return a [[#Resumption_Values|resumption value]] specifying how the debuggee's execution should proceed. If it returns <code>undefined</code>, stack unwinding continues as normal: if the current offset in <code>frame</code> is in a <code>try</code> block, control jumps to the corresponding <code>catch/finally</code> code; otherwise <i>frame</i> is discarded and stack unwinding continues. If the next older frame is also a debuggee script frame, the <code>onExceptionUnwind</code> hook will be called again for that frame.
+
+<dt>sourceHandler(<i>ASuffusionOfYellow</i>)
+<dd>This method is never called. If it is ever called, a contradiction has been proven, and the debugger is free to assume that everything is true.
+
+<dt>onError(<i>frame</i>, <i>report</i>)
+<dd>SpiderMonkey is about to report an error in <i>frame</i>. <i>Report</i> is an object describing the error, with the following properties:
+
+<dl>
+<dt>message
+<dd>The fully formatted error message.
+<dt>file
+<dd>If present, the source file name, URL, etc. (If this property is present, the <i>line</i> property will be too, and vice versa.)
+<dt>line
+<dd>If present, the source line number at which the error occurred.
+<dt>lineText
+<dd>If present, this is the source code of the offending line.
+<dt>offset
+<dd>The index of the character within lineText at which the error occurred.
+<dt>warning
+<dd>Present and true if this is a warning; absent otherwise.
+<dt>strict
+<dd>Present and true if this error or warning is due to the strict option (not to be confused with ES strict mode)
+<dt>exception
+<dd>Present and true if an exception will be thrown; absent otherwise.
+<dt>arguments
+<dd>An array of strings, representing the arguments substituted into the error message.
+</dl>
+
+This method's return value is ignored.
+</dl>
+
+On a new <code>Debugger</code> instance, each of these properties is initially <code>undefined</code>. Any value assigned to a debugging hook must be either a callable object or undefined; otherwise a TypeError is thrown.
+
+When one of the events described above occurs in a debuggee, the engine pauses the debuggee and calls the corresponding debugging hook on each <code>Debugger</code> object that is observing the debuggee. Afterwards, it continues running the debuggee where it left off, unless one of the hooks threw an exception or returned a non-default resumption value, as described above.
+
+Hook object methods run in the same thread in which the event occurred. They run in the compartment to which they belong, not in a debuggee compartment.
+
+=== Function Properties of the Debugger Prototype Object ===
+
+The functions described below may only be called with a <code>this</code> value referring to a <code>Debugger</code> instance; they may not be used as methods of other kinds of objects.
+
+<dl>
+<dt>addDebuggee(<i>global</i>)
+<dd>Add the compartment to which the object <i>global</i> belongs to the set of compartments this <code>Debugger</code> instance is debugging. Return the <code>Debugger.Object</code> instance referring to <i>global</i>. While <i>global</i> is typically a global object in the compartment, it can be any object in the desired compartment. If <i>global</i> is a <code>Debugger.Object</code> instance, operate on the compartment to which its referent belongs.
+
+The <i>global</i> object must be in a different compartment than this <code>Debugger</code> instance itself. If adding <i>global</i>'s compartment would create a cycle of debugger and debuggee compartments, this method throws an error.
+
+<dt>removeDebuggee(<i>global</i>)
+<dd>Remove the compartment to which the object <i>global</i> belongs from the set of compartments this <code>Debugger</code> instance is debugging. Return this <code>Debugger</code> instance. While <i>global</i> is typically a global object in the compartment, it can be any object in the desired compartment. If <i>global</i> is a <code>Debugger.Object</code> instance, operate on the compartment to which its referent belongs.
+
+<dt>hasDebuggee(<i>global</i>)
+<dd>Return <code>true</code> if the compartment to which <i>global</i> belongs is a debuggee of this <code>Debugger</code> instance. If <i>global</i> is a <code>Debugger.Object</code> instance, operate on the compartment to which its referent belongs.
+
+<dt>getDebuggees()
+<dd>Return an array of distinct <code>Debugger.Object</code> instances whose referents are all the compartments this <code>Debugger</code> instance is debugging.
+
+<dt>getYoungestFrame()
+<dd>Return a <code>Debugger.Frame</code> instance referring to the youngest debuggee frame currently on the calling thread's stack, or <code>null</code> if there are no debuggee frames on the stack.
+
+<dt>getAllScripts([<i>global</i>])
+<dd>Return an array of <code>Debugger.Script</code> objects, one for each debuggee script. With no argument, return all scripts for all debuggees. With the optional argument <i>global</i>, return all debuggee scripts that could run in that debuggee. If <i>global</i> is present but is not (a cross-compartment wrapper or <code>Debugger.Object</code> for) an object in a debuggee global's scope, throw a TypeError.
+
+This returns all existing scripts (in the given <i>global</i>, if any) that would qualify for the <code>onNewScript</code> hook if they were created right now. However, unlike <code>onNewScript</code>, <code>getAllScripts</code> includes not only top-level scripts but also nested function scripts.
+
+<dt>clearBreakpoint(<i>handler</i>)
+<dd>Remove all breakpoints set in this <code>Debugger</code> instance that use <i>handler</i> as their handler. Note that, if breakpoints using other handler objects are set at the same location(s) as <i>handler</i>, they remain in place.
+
+<dt>clearAllBreakpoints()
+<dd>Remove all breakpoints set using this <code>Debugger</code> instance.
+
+<dt>clearAllWatchpoints() <i>(future plan)</i>
+<dd>Clear all watchpoints owned by this <code>Debugger</code> instance.
+
+</dl>
+
+== Debugger.Frame ==
+
+A <code>Debugger.Frame</code> instance represents a debuggee stack frame. Given a <code>Debugger.Frame</code> instance, you can find the script the frame is executing, walk the stack to older frames, find the lexical environment in which the execution is taking place, and so on.
+
+SpiderMonkey creates only one <code>Debugger.Frame</code> instance for a given debuggee frame. Every hook object method called while the debuggee is running in a given frame receives the same frame object. Similarly, walking the stack back to a previously accessed debuggee frame yields the same frame object as before. Debugger code can add its own properties to a frame object and expect to find them later, use <code>==</code> to decide whether two expressions refer to the same frame, and so on.
+
+When the debuggee pops a stack frame (say, because a function call has returned or an exception has been thrown from it), the <code>Debugger.Frame</code> instance referring to that frame becomes inactive: its <code>live</code> property becomes <code>false</code>, and accessing its other properties or calling its methods throws an exception. Note that frames only become inactive at times that are predictable for the debugger: when the debuggee runs, or when the debugger removes frames from the stack itself.
+
+Although the debugger shares a JavaScript stack with the debuggee, the stack frames presented to the debugger via this interface never include the frames running the debugger's own JavaScript code. (Note that <code>"debugger"</code> frames represent continuations that pass control from debuggee code that has completed execution to the debugger, not the debugger's frames themselves.)
+
+Stack frames that represent the control state of generator-iterator objects behave in a special way, described in [[#Generator_Frames|Generator Frames]] below.
+
+=== Accessor Properties of the Debugger.Frame Prototype Object ===
+
+A <code>Debugger.Frame</code> instance inherits the following accessor properties from its prototype:
+
+<dl>
+<dt>type
+<dd>A string describing what sort of frame this is:
+<ul>
+<li><code>"call"</code>: a frame running a function call. (We may not be able to obtain frames for calls to host functions.)
+<li><code>"eval"</code>: a frame running code passed to <code>eval</code>.
+<li><code>"global"</code>: a frame running global code (JavaScript that is neither of the above).
+<li><code>"debugger"</code>: a frame for a call to user code invoked by the debugger (see the <code>eval</code> method below).
+</ul>
+
+<dt>this
+<dd>The value of <code>this</code> for this frame (a debuggee value).
+
+<dt>older
+<dd>The next-older frame, in which control will resume when this frame completes. If there is no older frame, this is <code>null</code>. (On a suspended generator frame, the value of this property is <code>null</code>; see [[#Generator_Frames|Generator Frames]].)
+
+<dt>depth
+<dd>The depth of this frame, counting from oldest to youngest; the oldest frame has a depth of zero.
+
+<dt>live
+<dd>True if the frame this <code>Debugger.Frame</code> instance refers to is still on the stack (or, in the case of generator-iterator objects, has not yet finished its iteration); false if it has completed execution or been popped in some other way.
+
+<dt>script
+<dd>The script being executed in this frame (a <code>Debugger.Script</code> instance), or <code>null</code> on frames for calls to host functions and <code>"debugger"</code> frames. On frames whose <code>callee</code> property is not null, this is equal to <code>callee.script</code>.
+
+<dt>offset
+<dd>The offset of the bytecode instruction currently being executed in <code>script</code>, or <code>undefined</code> if the frame's <code>script</code> property is <code>null</code>.
+
+<dt>environment
+<dd>The lexical environment within which evaluation is taking place (a <code>Debugger.Environment</code> instance), or <code>null</code> on frames for calls to host functions and <code>"debugger"</code> frames.
+
+<dt>callee
+<dd>The function whose application created this frame, as a debuggee value, or <code>null</code> if this is not a <code>"call"</code> frame.
+
+<dt>generator
+<dd>True if this frame is a generator frame, false otherwise.
+
+<dt>constructing
+<dd>True if this frame is for a function called as a constructor, false otherwise.
+
+<dt>arguments
+<dd>The arguments passed to the current frame, or <code>null</code> if this is not a <code>"call"</code> frame. When non-<code>null</code>, this is an object, in the debugger's compartment, with <code>Array.prototype</code> on its prototype chain, a non-writable <code>length</code> property, and properties whose names are array indices. Each property is a read-only accessor property whose getter returns the current value of the corresponding parameter. When the referent frame is popped, the argument value's properties' getters throw an error.
+
+<dt>onStep
+<dd>This property must be either <code>undefined</code> or a function. If it is a function, SpiderMonkey calls it when execution in this frame makes a small amount of progress, passing no arguments and providing this <code>Debugger.Frame</code> instance as the <code>this</code>value. The function should return a [[#Resumption_Values|resumption value]] specifying how the debuggee's execution should proceed.
+
+What constitutes "a small amount of progress" varies depending on the implementation, but it is fine-grained enough to implement useful "step" and "next" behavior.
+
+This property is ignored on frames that are not executing JavaScript code, like <code>"call"</code> frames for calls to host functions and <code>"debugger"</code> frames.
+
+<dt>onPop
+<dd>This property must be either <code>undefined</code> or a function. If it is a function, SpiderMonkey calls it just before this frame is popped, passing a [[#Completion_Values|completion value]] indicating how this frame's execution completed, and providing this <code>Debugger.Frame</code> instance as the <code>this</code> value. The function should return a [[#Resumption_Values|resumption value]] indicating how execution should proceed. On newly created frames, this property's value is <code>undefined</code>.
+
+Calls to frames' <code>onPop</code> handlers are cross-compartment, intra-thread calls: an <code>onPop</code> function must be in the debugger's compartment (and thus calls to it take place in the debugger's compartment), and the call takes place in the thread to which the frame belongs.
+
+When an <code>onPop</code> call reports the completion of a construction call (that is, a function called via the <code>new</code> operator), the completion value passed to the handler describes the value returned by the function body. If this value is not an object, it may be different from the value produced by the <code>new</code> expression, which will be the value of the frame's <code>this</code> property. (In ECMAScript terms, the <code>onPop</code> handler receives the value returned by the <code><nowiki>[[Call]]</nowiki></code> method, not the value returned by the <code><nowiki>[[Construct]]</nowiki></code> method.)
+
+When a debugger handler function forces a frame to complete early, by returning a <code>{ return:... }</code>, <code>{ throw:... }</code>, or <code>null</code> resumption value, SpiderMonkey calls the frame's <code>onPop</code> handler, if any. The completion value passed in this case reflects the resumption value that caused the frame to complete.
+
+When SpiderMonkey calls an <code>onPop</code> handler for a frame that is throwing an exception or being terminated, and the handler returns <code>undefined</code>, then SpiderMonkey proceeds with the exception or termination. That is, an <code>undefined</code> resumption value leaves the frame's throwing and termination process undisturbed.
+
+If there are several <code>Debugger.Frame</code> instances for a given stack frame with <code>onPop</code> handlers set (this can occur when several <code>Debugger</code> instances are debugging the same debuggee), their handlers are run in an unspecified order. The resumption value each handler returns establishes the completion value reported to the next handler.
+
+When a generator frame yields a value, SpiderMonkey calls its <code>Debugger.Frame</code> instance's <code>onPop</code> handler, if present, passing a <code>yield</code> resumption value; however, the <code>Debugger.Frame</code> instance remains live.
+
+This property is ignored on <code>"debugger"</code> frames.
+
+<dt>onResume(<i>value</i>)
+<dd>This property must be either <code>undefined</code> or a function. If it is a function, SpiderMonkey calls it if the current frame is a generator frame whose execution has just been resumed. The function should return a [[#Resumption_Values|resumption value]] indicating how execution should proceed. On newly created frames, this property's value is <code>undefined</code>.
+
+If the program resumed the generator by calling its <code>send</code> method and passing a value, then <i>value</i> is that value. Otherwise, <i>value</i> is undefined.
+</dl>
+
+=== Function Properties of the Debugger.Frame Prototype Object ===
+
+The functions described below may only be called with a <code>this</code> value referring to a <code>Debugger.Frame</code> instance; they may not be used as methods of other kinds of objects.
+
+<dl>
+<dt>eval(<i>code</i>)
+<dd>Evaluate <i>code</i> in the environment of this frame, and return a [[#Completion_Values|completion value]] describing how it completed. <i>Code</i> is a string. If this frame's <code>environment</code> property is <code>null</code>, throw a <code>TypeError</code>. All extant hook object methods, breakpoints, watchpoints, and so on remain active during the call. This function follows the [[#Invocation_functions|invocation function conventions]].
+
+<i>Code</i> is interpreted as strict mode code when it contains a Use Strict Directive, or the code executing in this frame is strict mode code.
+
+If <i>code</i> is not strict mode code, then variable declarations in <i>code</i> affect the environment of this frame. (In the terms used by the ECMAScript specification, the <code>VariableEnvironment</code> of the execution context for the eval code is the <code>VariableEnvironment</code> of the execution context that this frame represents.) If implementation restrictions prevent SpiderMonkey from extending this frame's environment as requested, this call throws an Error exception.
+
+<dt>evalWithBindings(<i>code</i>, <i>bindings</i>)
+<dd>Like <code>eval</code>, but evaluate <i>code</i> in the environment of this frame, extended with bindings from the object <i>bindings</i>. For each own enumerable property of <i>bindings</i> named <i>name</i> whose value is <i>value</i>, include a variable in the environment in which <i>code</i> is evaluated named <i>name</i>, whose value is <i>value</i>. Each <i>value</i> must be a debuggee value. (This is not like a <code>with</code> statement: <i>code</i> may access, assign to, and delete the introduced bindings without having any effect on the <i>bindings</i> object.)
+
+This method allows debugger code to introduce temporary bindings that are visible to the given debuggee code and which refer to debugger-held debuggee values, and do so without mutating any existing debuggee environment.
+
+Note that, like <code>eval</code>, declarations in the <i>code</i> passed to <code>evalWithBindings</code> affect the environment of this frame, even as that environment is extended by bindings visible within <i>code</i>. (In the terms used by the ECMAScript specification, the <code>VariableEnvironment</code> of the execution context for the eval code is the <code>VariableEnvironment</code> of the execution context that this frame represents, and the <i>bindings</i> appear in a new declarative environment, which is the eval code's <code>LexicalEnvironment</code>.) If implementation restrictions prevent SpiderMonkey from extending this frame's environment as requested, this call throws an <code>Error</code> exception.
+
+<dt>pop(<i>completion</i>) <i>(future plan)</i>
+<dd>Pop this frame (and any younger frames) from the stack as if this frame had completed as specified by the completion value <i>completion</i>.
+
+Note that this does <i>not</i> resume the debuggee's execution; it merely adjusts the debuggee's state to what it would be if this frame's execution had completed. The debuggee will only resume execution when you return from the hook object method that brought control to the debugger originally.
+
+This cannot remove any <code>"call"</code> frames for calls to host functions from the stack. (We might be able to make this work eventually, but it will take some cleverness.)
+
+<dt>replaceCall(<i>function</i>, <i>this</i>, <i>arguments</i>) <i>(future plan)</i>
+<dd>Pop any younger frames from the stack, and then change this frame into a frame for a call to <i>function</i>, with the given <i>this</i> value and <i>arguments</i>. <i>This</i> should be a debuggee value, or <code>{ asConstructor: true }</code> to invoke <i>function</i> as a constructor, in which case SpiderMonkey provides an appropriate <code>this</code> value itself. <i>Arguments</i> should be an array of debuggee values. This frame must be a <code>"call"</code> frame.
+
+This can be used as a primitive in implementing some forms of a "patch and continue" debugger feature.
+
+Note that this does <i>not</i> resume the debuggee's execution; it merely adjusts the debuggee's state to what it would be if this frame were about to make this call. The debuggee will only resume execution when you return from the hook object method that brought control to the debugger originally.
+
+Like <code>pop</code>, this cannot remove <code>"call"</code> frames for calls to host functions from the stack.
+
+</dl>
+
+=== Generator Frames ===
+
+SpiderMonkey supports generator-iterator objects, which produce a series of values by repeatedly suspending the execution of a function or expression. For example, calling a function that uses <code>yield</code> produces a generator-iterator object, as does evaluating a generator expression like <code>(i*i for each (i in [1,2,3]))</code>.
+
+A generator-iterator object refers to a stack frame with no fixed continuation frame. While the generator's code is running, its continuation is whatever frame called its <code>next</code> method; while the generator is suspended, it has no particular continuation frame; and when it resumes again, the continuation frame for that resumption could be different from that of the previous resumption.
+
+A <code>Debugger.Frame</code> instance representing a generator frame differs from an ordinary stack frame as follows:
+<ul>
+<li>A generator frame's <code>generator</code> property is true.
+<li>A generator frame disappears from the stack each time the generator yields a value and is suspended, and reappears atop the stack when it is resumed to produce the generator's next value. The same <code>Debugger.Frame</code> instance refers to the generator frame until it returns, throws an exception, or is terminated.
+<li>A generator frame's <code>older</code> property refers to the frame's continuation frame while the generator is running, and is <code>null</code> while the generator is suspended.
+<li>A generator frame's <code>depth</code> property reflects the frame's position on the stack when the generator is resumed, and is <code>null</code> while the generator is suspended.
+<li>A generator frame's <code>live</code> property remains true until the frame returns, throws an exception, or is terminated. Thus, generator frames can be live while not present on the stack.
+</ul>
+
+The other <code>Debugger.Frame</code> methods and accessor properties work as described on generator frames, even when the generator frame is suspended. You may examine a suspended generator frame's variables, and use its <code>script</code> and <code>offset</code> members to see which <code>yield</code> it is suspended at.
+
+A <code>Debugger.Frame</code> instance referring to a generator-iterator frame has a strong reference to the generator-iterator object; the frame (and its object) will live as long as the <code>Debugger.Frame</code> instance does. However, when the generator function returns, throws an exception, or is terminated, thus ending the iteration, the <code>Debugger.Frame</code> instance becomes inactive and its <code>live</code> property becomes <code>false</code>, just as would occur for any other sort of frame that is popped. A non-live <code>Debugger.Frame</code> instance no longer holds a strong reference to the generator-iterator object.
+
+== Debugger.Script ==
+
+A <code>Debugger.Script</code> instance refers to a sequence of bytecode in the debuggee; it is the JavaScript-level presentation of a JSAPI <code>JSScript</code> object. Each of the following is represented by single JSScript object:
+<ul>
+<li>The body of a function&mdash;that is, all the code in the function that is not contained within some nested function.
+<li>The code passed to a single call to <code>eval</code>, excluding the bodies of any functions that code defines.
+<li>The contents of a <code>&lt;script&gt;</code> element.
+<li>A DOM event handler, whether embedded in HTML or attached to the element by other JavaScript code.
+<li>Code appearing in a <code>javascript:</code> URL.
+</ul>
+
+The <code>Debugger</code> interface constructs <code>Debugger.Script</code> objects as script objects are uncovered by the debugger: via the <code>onNewScript</code> hook object method; via <code>Debugger.Frame</code>'s <code>script</code> properties; via the <code>functionScript</code> method of <code>Debugger.Object</code> instances; and so on. It constructs exactly one <code>Debugger.Script</code> instance for each underlying script object; debugger code can add its own properties to a script object and expect to find them later, use <code>==</code> to decide whether two expressions refer to the same script, and so on.
+
+A <code>Debugger.Script</code> instance is a strong reference to a JSScript object; it protects the script it refers to from being garbage collected. However, scripts representing code passed to <code>eval</code> may be deleted when the <code>eval</code> returns; see the description of the <code>live</code>property, below.
+
+Note that SpiderMonkey may use the same <code>Debugger.Script</code> instances for equivalent functions or evaluated code --- that is, scripts representing the same source code, at the same position in the same source file, evaluated in the same lexical environment.
+
+=== Accessor Properties of the Debugger.Script Prototype Object ===
+
+A <code>Debugger.Script</code> instance inherits the following accessor properties from its prototype:
+
+<dl>
+<dt>url
+<dd>The filename or URL from which this script's code was loaded.
+
+<dt>startLine
+<dd>The number of the line at which this script's code starts, within the file or document named by <code>url</code>.
+
+<dt>lineCount
+<dd>The number of lines this script's code occupies, within the file or document named by <code>url</code>.
+
+<dt>strictMode
+<dd>This is <code>true</code> if this script's code is ECMAScript strict mode code, and <code>false</code> otherwise.
+</dl>
+
+=== Function Properties of the Debugger.Script Prototype Object ===
+
+The functions described below may only be called with a <code>this</code> value referring to a <code>Debugger.Script</code> instance; they may not be used as methods of other kinds of objects.
+
+<dl>
+<dt>decompile([<i>pretty</i>])
+<dd>Return a string containing JavaScript source code equivalent to this script in its effect and result. If <i>pretty</i> is present and true, produce indented code with line breaks. (Note that <code>Debugger.Object</code> instances referring to functions also have a <code>decompile</code> method, whose result includes the function header and parameter names, so it is probably better to write <code>f.decompile()</code> than to write <code>f.getFunctionScript().decompile()</code>.)
+
+<dt>getAllOffsets()
+<dd>Return an array <i>L</i> describing the relationship between bytecode instruction offsets and source code positions in this script. <i>L</i> is sparse, and indexed by source line number. If a source line number <i>line</i> has no code, then <i>L</i> has no <i>line</i> property. If there is code for <i>line</i>, then <code><i>L</i>[<i>line</i>]</code> is an array of offsets of byte code instructions that are entry points to that line.
+
+For example, suppose we have a script for the following source code:
+  a=[]
+  for (i=1; i < 10; i++)
+    // It's hip to be square.
+    a[i] = i*i;
+
+Calling <code>getAllOffsets()</code> on that code might yield an array like this:
+  [[0], [5, 20], , [10]]
+
+This array indicates that:
+<ul>
+<li>the first line's code starts at offset 0 in the script;
+<li>the <code>for</code> statement head has two entry points at offsets 5 and 20 (for the initialization, which is performed only once, and the loop test, which is performed at the start of each iteration);
+<li>the third line has no code;
+<li>and the fourth line begins at offset 10.
+</ul>
+
+<dt>getLineOffsets(<i>line</i>)
+<dd>Return an array of bytecode instruction offsets representing the entry points to source line <i>line</i>. If the script contains no executable code at that line, the array returned is empty.
+
+<dt>getOffsetLine(<i>offset</i>)
+<dd>Return the source code line responsible for the bytecode at <i>offset</i> in this script.
+
+<dt>getChildScripts()
+<dd>Return a new array whose elements are Debugger.Script objects for each function and each generator expression in this script. Only direct children are included; nested children can be reached by walking the tree.
+
+<dt>setBreakpoint(<i>offset</i>, <i>handler</i>)
+<dd>Set a breakpoint at the bytecode instruction at <i>offset</i> in this script, reporting hits to the <code>hit</code> method of <i>handler</i>, an object in the debugger compartment. If <i>offset</i> is not a valid offset in this script, throw an error.
+
+When execution reaches the given instruction, SpiderMonkey calls the <code>hit</code> method of <i>handler</i>, passing a <code>Debugger.Frame</code> instance representing the currently executing stack frame. The <code>hit</code> method's return value should be a [[#Resumption_Values|resumption value]], determining how execution should continue.
+
+Any number of breakpoints may be set at a single location; when control reaches that point, SpiderMonkey calls their handlers in an unspecified order.
+
+Any number of breakpoints may use the same <i>handler</i> object.
+
+Breakpoint handler calls are cross-compartment, intra-thread calls: <code><i>handler</i>.hit</code> must be a function in the debugger's compartment (and thus calls to it take place in the debugger's compartment), and the call takes place in the same thread that hit the breakpoint.
+
+The new breakpoint belongs to this <code>Debugger</code> instance; disabling the <code>Debugger</code> instance disables this breakpoint.
+
+<dt>getBreakpoints([<i>offset</i>])
+<dd>Return an array containing the handler objects for all the breakpoints set at <i>offset</i> in this script. If <i>offset</i> is omitted, return the handlers of all breakpoints set anywhere in this script. If <i>offset</i> is present, but not a valid offset in this script, throw an error.
+
+<dt>clearBreakpoints(handler, [<i>offset</i>])
+<dd>Remove all breakpoints set in this <code>Debugger</code> instance that use <i>handler</i> as their handler. If <i>offset</i> is given, remove only those breakpoints set at <i>offset</i> that use <i>handler</i>; if <i>offset</i> is not a valid offset in this script, throw an error.
+
+Note that, if breakpoints using other handler objects are set at the same location(s) as <i>handler</i>, they remain in place.
+
+<dt>clearAllBreakpoints([<i>offset</i>])
+<dd>Remove all breakpoints set in this script. If <i>offset</i> is present, remove all breakpoints set at that offset in this script; if <i>offset</i> is not a valid bytecode offset in this script, throw an error.
+
+</dl>
+
+== Debugger.Object ==
+
+A <code>Debugger.Object</code> instance represents an object in the debuggee. Debugger code never accesses debuggee objects directly; instead, it operates on <code>Debugger.Object</code> instances that refer to the debuggee objects.
+
+A <code>Debugger.Object</code> instance has reflection-oriented methods to inspect and modify its referent. The referent's properties do not appear directly as properties of the <code>Debugger.Object</code> instance; the debugger can access them only through methods like <code>Debugger.Object.prototype.getOwnPropertyDescriptor</code> and <code>Debugger.Object.prototype.defineProperty</code>, ensuring that the debugger will not inadvertently invoke the referent's getters and setters.
+
+SpiderMonkey creates exactly one <code>Debugger.Object</code> instance for each debuggee object it presents to the debugger: if the debugger encounters the same object through two different routes (perhaps two functions are called on the same object), SpiderMonkey presents the same <code>Debugger.Object</code> instance to the debugger each time. This means that the debugger can use the <code>==</code> operator to recognize when two <code>Debugger.Object</code> instances refer to the same debuggee object, and place its own properties on a <code>Debugger.Object</code> instance to store metadata about particular debuggee objects.
+
+While most <code>Debugger.Object</code> instances are created by SpiderMonkey in the process of exposing debuggee's behavior and state to the debugger, the debugger can use <code>Debugger.Object.prototype.copy</code> and <code>Debugger.Object.prototype.create</code> to create objects in a debuggee compartment.
+
+<code>Debugger.Object</code> instances protect their referents from the garbage collector; as long as the <code>Debugger.Object</code> instance is live, the referent remains live. Garbage collection has no debugger-visible effect on <code>Debugger.Object</code> instances.
+
+=== Accessor Properties of the Debugger.Object prototype ===
+
+A <code>Debugger.Object</code> instance inherits the following accessor properties from its prototype:
+
+<dl>
+<dt>proto
+<dd>The referent's prototype (as a new <code>Debugger.Object</code> instance), or <code>null</code> if it has no prototype.
+
+<dt>class
+<dd>A string naming the ECMAScript <code><nowiki>[[Class]]</nowiki></code> of the referent.
+
+<dt>callable
+<dd><code>true</code> if the referent is a callable object (such as a function or a function proxy); false otherwise.
+
+<dt>name
+<dd>If the referent is a function, its function name. If the referent is an anonymous function, or not a function at all, this is <code>undefined</code>.
+
+<dt>parameterNames
+<dd>If the referent is a function, the names of the its parameters, as an array of strings. If the referent is not a function at all, this is <code>undefined</code>.
+
+If the referent is a host function for which parameter names are not available, return an array with one element per parameter, each of which is <code>undefined</code>.
+
+If the referent is a function proxy, return an empty array.
+
+If the referent uses destructuring parameters, then the array's elements reflect the structure of the parameters. For example, if the referent is a function declared in this way:
+
+  function f(a, [b, c], {d, e:f}) { ... }
+
+then this <code>Debugger.Object</code> instance's <code>parameterNames</code> property would have the value:
+
+  ["a", ["b", "c"], {d:"d", e:"f"}]
+
+<dt>script
+<dd>If the referent is a function implemented in JavaScript, that function's script, as a <code>Debugger.Script</code> instance. If the referent is a function proxy or not a function implemented in JavaScript, this is <code>undefined</code>.
+
+<dt>environment
+<dd>If the referent is a function implemented in JavaScript, a <code>Debugger.Environment</code> instance representing the lexical environment enclosing the function when it was created. If the referent is a function proxy or not a function implemented in JavaScript, this is <code>undefined</code>.
+
+<dt>proxyHandler
+<dd>If the referent is a proxy, its handler&mdash;the object whose methods are invoked to implement accesses of the proxy's properties. If the referent is not a proxy, this is <code>null</code>.
+
+<dt>proxyCallTrap
+<dd>If the referent is a function proxy, its call trap function&mdash;the function called when the function proxy is called. If the referent is not a function proxy, this is <code>null</code>.
+
+<dt>proxyConstructTrap
+<dd>If the referent is a function proxy, its construction trap function&mdash;the function called when the function proxy is called via a <code>new</code> expression. If the referent is not a function proxy, this is <code>null</code>.
+
+</dl>
+
+=== Function Properties of the Debugger.Object prototype ===
+
+The functions described below may only be called with a <code>this</code> value referring to a <code>Debugger.Object</code> instance; they may not be used as methods of other kinds of objects. The descriptions use "referent" to mean "the referent of this <code>Debugger.Object</code> instance".
+
+Unless otherwise specified, these methods are not [[#Invocation_functions|invocation functions]]; if a call would cause debuggee code to run (say, because it gets or sets an accessor property whose handler is debuggee code, or because the referent is a proxy whose traps are debuggee code), the call throws a [[#The_Debugger.DebuggeeWouldRun_Exception|<code>Debugger.DebuggeeWouldRun</code>]] exception.
+
+<dl>
+<dt>getProperty(<i>name</i>)
+<dd>Return the value of the referent's property named <i>name</i>, or <code>undefined</code> if it has no such property. <i>Name</i> must be a string. The result is a debuggee value.
+
+<dt>setProperty(<i>name</i>, <i>value</i>)
+<dd>Store <i>value</i> as the value of the referent's property named <i>name</i>, creating the property if it does not exist. <i>Name</i> must be a string; <i>value</i> must be a debuggee value.
+
+<dt>getOwnPropertyDescriptor(<i>name</i>)
+<dd>Return a property descriptor for the property named <i>name</i> of the referent. If the referent has no such property, return <code>undefined</code>. (This function behaves like the standard <code>Object.getOwnPropertyDescriptor</code> function, except that the object being inspected is implicit; the property descriptor returned is in the debugger's compartment; and its <code>value</code>, <code>get</code>, and <code>set</code> properties, if present, are debuggee values.)
+
+<dt>getOwnPropertyNames()
+<dd>Return an array of strings naming all the referent's own properties, as if <code>Object.getOwnPropertyNames(<i>referent</i>)</code> had been called in the debuggee, and the result copied to the debugger's compartment.
+
+<dt>defineProperty(<i>name</i>, <i>attributes</i>)
+<dd>Define a property on the referent named <i>name</i>, as described by the property descriptor <i>descriptor</i>. Any <code>value</code>, <code>get</code>, and <code>set</code> properties of <i>attributes</i> must be debuggee values. (This function behaves like <code>Object.defineProperty</code>, except that the target object is implicit, and in a different compartment from the function and descriptor.)
+
+<dt>defineProperties(<i>properties</i>)
+<dd>Add the properties given by <i>properties</i> to the referent. (This function behaves like <code>Object.defineProperties</code>, except that the target object is implicit, and in a different compartment from the <i>properties</i> argument.)
+
+<dt>deleteProperty(<i>name</i>)
+<dd>Remove the referent's property named <i>name</i>. Return true if the property was successfully removed, or if the referent has no such property. Return false if the property is non-configurable.
+
+<dt>seal()
+<dd>Prevent properties from being added to or deleted from the referent. Return this <code>Debugger.Object</code> instance. (This function behaves like the standard <code>Object.seal</code> function, except that the object to be sealed is implicit and in a different compartment from the caller.)
+
+<dt>freeze()
+<dd>Prevent properties from being added to or deleted from the referent, and mark each property as non-writable. Return this <code>Debugger.Object</code> instance. (This function behaves like the standard <code>Object.freeze</code> function, except that the object to be sealed is implicit and in a different compartment from the caller.)
+
+<dt>preventExtensions()
+<dd>Prevent properties from being added to the referent. (This function behaves like the standard <code>Object.preventExtensions</code> function, except that the object to operate on is implicit and in a different compartment from the caller.)
+
+<dt>isSealed()
+<dd>Return true if the referent is sealed&mdash;that is, if it is not extensible, and all its properties have been marked as non-configurable. (This function behaves like the standard <code>Object.isSealed</code> function, except that the object inspected is implicit and in a different compartment from the caller.)
+
+<dt>isFrozen()
+<dd>Return true if the referent is frozen&mdash;that is, if it is not extensible, and all its properties have been marked as non-configurable and read-only. (This function behaves like the standard <code>Object.isFrozen</code> function, except that the object inspected is implicit and in a different compartment from the caller.)
+
+<dt>isExtensible()
+<dd>Return true if the referent is extensible&mdash;that is, if it can have new properties defined on it. (This function behaves like the standard <code>Object.isExtensible</code> function, except that the object inspected is implicit and in a different compartment from the caller.)
+
+<dt>copy(<i>value</i>)
+<dd>Apply the HTML5 "structured cloning" algorithm to create a copy of <i>value</i> in the referent's compartment, and return a <code>Debugger.Object</code> instance referring to the copy.
+
+Note that this returns primitive values unchanged. This means you can use <code>Debugger.Object.prototype.copy</code> as a generic "debugger value to debuggee value" conversion function&mdash;within the limitations of the "structured cloning" algorithm.
+
+<dt>create(<i>prototype</i>, [<i>properties</i>])
+<dd>Create a new object in the referent's compartment, and return a <code>Debugger.Object</code> referring to it. The new object's prototype is <i>prototype</i>, which must be a debuggee object. The new object's properties are as given by <i>properties</i>, as if <i>properties</i> were passed to <code>Debugger.Object.prototype.defineProperties</code>, with the new <code>Debugger.Object</code> instance as the <code>this</code> value.
+
+<dt>decompile([<i>pretty</i>])
+<dd>If the referent is a function defined in JavaScript, return the source code for a JavaScript function definition equivalent to the referent function in its effect and result, as a string. If <i>pretty</i> is present and true, produce indented code with line breaks. If the referent is not a function, return <code>undefined</code>.
+
+<dt>call(<i>this</i>, <i>argument</i>, ...)
+<dd>If the referent is callable, call it with the given <i>this</i> value and <i>argument</i> values, and return a [[#Completion_Values|completion value]] describing how the call completed. <i>This</i> should be a debuggee value, or <code>{ asConstructor: true }</code> to invoke the referent as a constructor, in which case SpiderMonkey provides an appropriate <code>this</code> value itself. Each <i>argument</i> must be a debuggee value. All extant hook object methods, breakpoints, watchpoints, and so on remain active during the call. Details of how the call is carried out are given in the description of [[#Debugger.Frame.Debugger|Debugger.Frame.Debugger frames]]. If the referent is not callable, throw a <code>TypeError</code>. This function follows the [[#Invocation_functions|invocation function conventions]].
+
+<dt>apply(<i>this</i>, <i>arguments</i>)
+<dd>If the referent is callable, call it with the given <i>this</i> value and the argument values in <i>arguments</i>, and return a [[#Completion_Values|completion value]] describing how the call completed. <i>This</i> should be a debuggee value, or <code>{ asConstructor: true }</code> to invoke <i>function</i> as a constructor, in which case SpiderMonkey provides an appropriate <code>this</code> value itself. <i>Arguments</i> must either be an array (in the debugger) of debuggee values, or <code>null</code> or <code>undefined</code>, which are treated as an empty array. All extant hook object methods, breakpoints, watchpoints, and so on remain active during the call. Details of how the call is carried out are given in the description of [[#Debugger.Frame.Debugger|Debugger.Frame.Debugger frames]]. If the referent is not callable, throw a <code>TypeError</code>. This function follows the [[#Invocation_functions|invocation function conventions]].
+
+<dt>evalInGlobal(<i>code</i>)
+<dd>If the referent is a global object, evaluate <i>code</i> in that global environment, and return a [[#Completion_Values|completion value]] describing how it completed. <i>Code</i> is a string. All extant hook object methods, breakpoints, watchpoints, and so on remain active during the call. This function follows the [[#Invocation_functions|invocation function conventions]]. If the referent is not a global object, throw a <code>TypeError</code> exception.
+
+<i>Code</i> is interpreted as strict mode code when it contains a Use Strict Directive.
+
+If <i>code</i> is not strict mode code, then variable declarations in <i>code</i> affect the referent global object. (In the terms used by the ECMAScript specification, the <code>VariableEnvironment</code> of the execution context for the eval code is the referent.)
+
+<dt>evalInGlobalWithBindings(<i>code</i>, <i>bindings</i>)
+<dd>Like <code>evalInGlobal</code>, but evaluate <i>code</i> using the referent as the variable object, but with a lexical environment extended with bindings from the object <i>bindings</i>. For each own enumerable property of <i>bindings</i> named <i>name</i> whose value is <i>value</i>, include a variable in the lexical environment in which <i>code</i> is evaluated named <i>name</i>, whose value is <i>value</i>. Each <i>value</i> must be a debuggee value. (This is not like a <code>with</code> statement: <i>code</i> may access, assign to, and delete the introduced bindings without having any effect on the <i>bindings</i> object.)
+
+This method allows debugger code to introduce temporary bindings that are visible to the given debuggee code and which refer to debugger-held debuggee values, and do so without mutating any existing debuggee environment.
+
+Note that, like <code>evalInGlobal</code>, declarations in the <i>code</i> passed to <code>evalInGlobalWithBindings</code> affect the referent global object, even as <i>code</i> is evaluated with <i>bindings</i> visible. (In the terms used by the ECMAScript specification, the <code>VariableEnvironment</code> of the execution context for the eval code is the referent, and the <i>bindings</i> appear in a new declarative environment, which is the eval code's <code>LexicalEnvironment</code>.)
+
+<dt>asEnvironment()
+<dd>If the referent is a global object, return the <code>Debugger.Environment</code> instance representing the referent as a variable environment for evaluating code. If the referent is not a global object, throw a <code>TypeError</code>.
+
+<dt>setObjectWatchpoint(<i>handler</i>) <i>(future plan)</i>
+<dd>Set a watchpoint on all the referent's own properties, reporting events by calling <i>handler</i>'s methods. Any previous watchpoint handler on this <code>Debugger.Object</code> instance is replaced. If <i>handler</i> is null, the referent is no longer watched. <i>Handler</i> may have the following methods, called under the given circumstances: 
+
+<dl>
+<dt>add(<i>frame</i>, <i>name</i>, <i>descriptor</i>)
+<dd>A property named <i>name</i> has been added to the referent. <i>Descriptor</i> is a property descriptor of the sort accepted by <code>Debugger.Object.prototype.defineProperty</code>, giving the newly added property's attributes.
+<dt>delete(<i>frame</i>, <i>name</i>)
+<dd>The property named <i>name</i> is about to be deleted from the referent.
+<dt>change(<i>frame</i>, <i>name</i>, <i>oldDescriptor</i>, <i>newDescriptor</i>)
+<dd>The existing property named <i>name</i> on the referent is being changed from those given by <i>oldDescriptor</i> to those given by <i>newDescriptor</i>. This handler method is only called when attributes of the property other than its value are being changed; if only the value is changing, SpiderMonkey calls the handler's <code>set</code> method.
+<dt>set(<i>frame</i>, <i>oldValue</i>, <i>newValue</i>)
+<dd>The data property named <i>name</i> of the referent is about to have its value changed from <i>oldValue</i> to <i>newValue</i>.
+
+SpiderMonkey only calls this method on assignments to data properties that will succeed; assignments to un-writable data properties fail without notifying the debugger.
+<dt>extensionsPrevented(<i>frame</i>)
+The referent has been made non-extensible, as if by a call to <code>Object.preventExtensions</code>.
+</dl>
+
+For all watchpoint handler methods:
+<ul>
+<li>The <i>frame</i> argument is the current stack frame, whose code is about to perform the operation on the object being reported.
+<li>If the method returns <code>undefined</code>, then SpiderMonkey makes the announced change to the object, and continues execution normally. If the method returns an object:
+<ul>
+<li>If the object has a <code>superseded</code> property whose value is a true value, then SpiderMonkey does not make the announced change.
+<li>If the object has a <code>resume</code> property, its value is taken as a [[#Resumption_Values|resumption value]], indicating how execution should proceed. (However, <code>return</code> resumption values are not supported.)
+</ul>
+<li>If a given method is absent from <i>handler</i>, then events of that sort are ignored. The watchpoint consults <i>handler</i>'s properties each time an event occurs, so adding methods to or removing methods from <i>handler</i> after setting the watchpoint enables or disables reporting of the corresponding events.
+<li>Values passed to <i>handler</i>'s methods are debuggee values. Descriptors passed to <i>handler</i>'s methods are ordinary objects in the debugger's compartment, except for <code>value</code>, <code>get</code>, and <code>set</code> properties in descriptors, which are debuggee values; they are the sort of value expected by <code>Debugger.Object.prototype.defineProperty</code>.
+<li>Watchpoint handler calls are cross-compartment, intra-thread calls: <i>handler</i> must be a function in the debugger's compartment (and thus calls to it take place in the debugger's compartment), and the call takes place in the same thread that changed the property.
+</ul>
+
+The new watchpoint belongs to the <code>Debugger</code> instance to which this <code>Debugger.Object</code> instance belongs; disabling the <code>Debugger</code> instance disables this watchpoint.
+
+<dt>clearObjectWatchpoint() <i>(future plan)</i>
+<dd>Remove any object watchpoint set on the referent.
+
+<dt>setPropertyWatchpoint(<i>name</i>, <i>handler</i>) <i>(future plan)</i>
+<dd>Set a watchpoint on the referent's property named <i>name</i>, reporting events by calling <i>handler</i>'s methods. Any previous watchpoint handler on this property for this <code>Debugger.Object</code> instance is replaced. If <i>handler</i> is null, the property is no longer watched. <i>Handler</i> is as described for <code>Debugger.Object.prototype.setObjectWatchpoint</code>, except that it does not receive <code>extensionsPrevented</code> events.
+
+<dt>clearPropertyWatchpoint(<i>name</i>) <i>(future plan)</i>
+<dd>Remove any watchpoint set on the referent's property named <i>name</i>.
+
+</dl>
+
+== Debugger.Environment ==
+
+A <code>Debugger.Environment</code> instance represents a lexical environment, associating names with variables. "Call", "eval", and "global" stack frames have an associated environment object describing the variables in scope in that frame, and each function defined in JavaScript has an environment representing the environment the function has closed over.
+
+SpiderMonkey <code>Debugger.Environment</code> instances as needed as the debugger inspects stack frames and function objects; calling <code>Debugger.Environment</code> as a function or constructor yields a <code>TypeError</code>.
+
+SpiderMonkey creates exactly one <code>Debugger.Environment</code> instance for each environment it presents to the debugger: if the debugger encounters the same environment through two different routes (perhaps two functions have closed over the same environment), SpiderMonkey presents the same <code>Debugger.Environment</code> instance to the debugger each time. This means that the debugger can use the <code>==</code> operator to recognize when two <code>Debugger.Environment</code> instances refer to the same environment in the debuggee, and place its own properties on a <code>Debugger.Environment</code> instance to store metadata about particular environments.
+
+<code>Debugger.Environment</code> instances protect their referents from the garbage collector; as long as the <code>Debugger.Environment</code> instance is live, the referent remains live. Garbage collection has no debugger-visible effect on <code>Debugger.Environment</code> instances.
+
+=== Accessor Properties of the Debugger.Environment Prototype Object === 
+
+A <code>Debugger.Environment</code> instance inherits the following accessor properties from its prototype:
+
+<dl>
+<dt>type
+<dd>The type of this environment object, one of the following values:
+<ul>
+<li>"declarative", indicating that the environment is a declarative environment record. Function calls, calls to <code>eval</code>, <code>let</code> blocks, <code>catch</code> blocks, and the like create declarative environment records.
+<li>"object", indicating that the environment's bindings are the properties of an object. <code>With</code> statements create object environments. The global object and DOM elements appear in the chain of environments via object environments.
+</ul>
+
+<dt>parent
+<dd>The environment that encloses this one, or <code>null</code> if this is the outermost environment. This is a accessor property with a getter, and no setter, inherited by instances.
+
+<dt>object
+<dd>A <code>Debugger.Object</code> instance referring to the object whose properties this environment record reflects. If this is a declarative environment record, this accessor throws a <code>TypeError</code>.
+</dl>
+
+=== Function Properties of the Debugger.Environment Prototype Object ===
+
+The methods described below may only be called with a <code>this</code> value referring to a <code>Debugger.Environment</code> instance; they may not be used as methods of other kinds of objects.
+
+<dl>
+<dt>names()
+<dd>Return an array of strings giving the names of the identifiers bound by this environment.
+
+<dt>getVariable(<i>name</i>)
+<dd>Return the value of the variable named <i>name</i> in this environment, or <code>undefined</code> if it has no such variable. <i>Name</i> must be a string that is a valid identifier name. The result is a debuggee value. This is not an [[#Invocation_functions|invocation function]]; if this call would cause debuggee code to run (say, because the variable is an accessor property of the global object with a getter), this call throws a [[#The_Debugger.DebuggeeWouldRun_Exception|<code>Debugger.DebuggeeWouldRun</code>]] exception.
+
+<dt>setVariable(<i>name</i>, <i>value</i>)
+<dd>Store <i>value</i> as the value of the variable named <i>name</i> in this environment, creating the variable if it does not exist. <i>Name</i> must be a string that is a valid identifier name; <i>value</i> must be a debuggee value. This is not an [[#Invocation_functions|invocation function]]; if this call would cause debuggee code to run, this call throws a [[#The_Debugger.DebuggeeWouldRun_Exception|<code>Debugger.DebuggeeWouldRun</code>]] exception.
+
+<dt>getVariableDescriptor(<i>name</i>)
+<dd>Return an property descriptor describing the variable bound to <i>name</i> in this environment, of the sort returned by <code>getOwnPropertyDescriptor</code>. <i>Name</i> must be a string whose value is a legitimate JavaScript variable name.
+
+If this is an object environment record, this simply returns the descriptor for the given property of the environment's object. If this is a declarative environment record, this returns a descriptor reflecting the binding's mutability as the descriptor's <code>writable</code> property, and its deletability as the descriptor's <code>configurable</code> property. All declarative environment record bindings are marked as <code>enumerable</code>. <i>(This isn't great; the semantics of variables in declarative enviroments don't really match those of properties, so returning descriptors that suggest that they do may be unhelpful.)</i>
+
+If there is no variable named <i>name</i> in this environment, throw a <code>ReferenceError</code>.
+
+This method does not search this environment's enclosing environments for bindings for <i>name</i>.
+
+<dt>defineVariable(<i>name</i>, <i>descriptor</i>)
+<dd>Create or reconfigure the variable named <i>name</i> bound in this environment according to <i>descriptor</i>. On success, return <code>undefined</code>; on failure, throw an appropriate exception. <i>Name</i> must be a string whose value is a legitimate JavaScript variable name.
+
+<dt>find(<i>name</i>)
+<dd>Return a reference to the innermost environment, starting with this environment, that binds <i>name</i>. If <i>name</i> is unbound in this environment, return <code>null</code>. <i>Name</i> must be a string whose value is a legitimate JavaScript variable name.
+
+<dt>eval(<i>code</i>) <i>(future plan)</i>
+<dd>Evaluate <i>code</i> in this environment, and return a [[#Completion_Values|completion value]] describing how it completed. <i>Code</i> is a string. All extant hook object methods, breakpoints, watchpoints, and so on remain active during the call. This function follows the [[#Invocation_functions|invocation function conventions]].
+
+<i>Code</i> is interpreted as strict mode code when it contains a Use Strict Directive.
+
+If <i>code</i> is not strict mode code, then variable declarations in <i>code</i> affect this environment. (In the terms used by the ECMAScript specification, the <code>VariableEnvironment</code> of the execution context for the eval code is the <code>VariableEnvironment</code> this <code>Debugger.Environment</code> instance represents.) If implementation restrictions prevent SpiderMonkey from extending this environment as requested, this call throws an <code>Error</code> exception.
+
+<dt>evalWithBindings(<i>code</i>, <i>bindings</i>) <i>(future plan)</i>
+<dd>Like <code>eval</code>, but evaluate <i>code</i> in this environment, extended with bindings from the object <i>bindings</i>. For each own enumerable property of <i>bindings</i> named <i>name</i> whose value is <i>value</i>, include a variable in the environment in which <i>code</i> is evaluated named <i>name</i>, whose value is <i>value</i>. Each <i>value</i> must be a debuggee value. (This is not like a <code>with</code> statement: <i>code</i> may access, assign to, and delete the introduced bindings without having any effect on the <i>bindings</i> object.)
+
+This method allows debugger code to introduce temporary bindings that are visible to the given debuggee code and which refer to debugger-held debuggee values, and do so without mutating any existing debuggee environment.
+
+Note that, like <code>eval</code>, declarations in the <i>code</i> passed to <code>evalWithBindings</code> affect this environment, even as <i>code</i> is evaluated with <i>bindings</i> visible. (In the terms used by the ECMAScript specification, the <code>VariableEnvironment</code> of the execution context for the eval code is the <code>VariableEnvironment</code> this environment represents, and the <i>bindings</i> appear in a new declarative environment, which is the eval code's <code>LexicalEnvironment</code>.) If implementation restrictions prevent SpiderMonkey from extending this environment as requested, this call throws an <code>Error</code> exception.
+</dl>
+
+== Future Work ==
+
+<ul>
+<li>The interface should reveal the presence of scripted proxies, allow the user to retrieve their handlers, and so on.
+<li>The interface should provide clean, predictable ways to observe the effects of garbage collection. For example, perhaps it should provide an interface like [[http://www.cs.indiana.edu/~dyb/pubs/guardians-abstract.html R. Kent Dybvig's guardians]] for observing when objects and scripts become unreachable.
+</ul>
