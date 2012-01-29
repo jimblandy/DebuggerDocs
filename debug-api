@@ -542,7 +542,7 @@ SpiderMonkey creates exactly one <code>Debugger.Object</code> instance for each 
 
 While most <code>Debugger.Object</code> instances are created by SpiderMonkey in the process of exposing debuggee's behavior and state to the debugger, the debugger can use <code>Debugger.Object.prototype.copy</code> and <code>Debugger.Object.prototype.create</code> to create objects in debuggee compartments, allocated as if by particular debuggee globals.
 
-<code>Debugger.Object</code> instances protect their referents from the garbage collector; as long as the <code>Debugger.Object</code> instance is live, the referent remains live. This means that garbage collection has no debugger-visible effect on <code>Debugger.Object</code> instances.
+<code>Debugger.Object</code> instances protect their referents from the garbage collector; as long as the <code>Debugger.Object</code> instance is live, the referent remains live. This means that garbage collection has no visible effect on <code>Debugger.Object</code> instances.
 
 === Accessor Properties of the Debugger.Object prototype ===
 
@@ -720,17 +720,17 @@ The new watchpoint belongs to the <code>Debugger</code> instance to which this <
 
 == Debugger.Environment ==
 
-A <code>Debugger.Environment</code> instance represents a lexical environment, associating names with variables. Each "call", "eval", and "global" stack frame has an associated environment object describing the variables in scope in that frame, and each function defined in JavaScript has an environment representing the environment the function has closed over.
+A <code>Debugger.Environment</code> instance represents a lexical environment, associating names with variables. Each <code>Debugger.Frame</code> instance representing a debuggee frame has an associated environment object describing the variables in scope in that frame; and each <code>Debugger.Object</code> instance representing a debuggee function has an environment object representing the environment the function has closed over.
 
-ECMAScript environments form a tree, in which each local environment is parented by its enclosing environment (in ECMAScript terms, its 'outer' environment). We say an environment <i>binds</i> an identifier if that environment itself associates the identifier with a variable, independently of its outer environments. We say an identifier is <i>in scope</i> in an environment if the identifier is bound in that environment or any environment on its "outer" chain.
+ECMAScript environments form a tree, in which each local environment is parented by its enclosing environment (in ECMAScript terms, its 'outer' environment). We say an environment <i>binds</i> an identifier if that environment itself associates the identifier with a variable, independently of its outer environments. We say an identifier is <i>in scope</i> in an environment if the identifier is bound in that environment or any enclosing environment.
 
-SpiderMonkey creates <code>Debugger.Environment</code> instances as needed as the debugger inspects stack frames and function objects; calling <code>Debugger.Environment</code> as a function or constructor yields a <code>TypeError</code>.
+SpiderMonkey creates <code>Debugger.Environment</code> instances as needed as the debugger inspects stack frames and function objects; calling <code>Debugger.Environment</code> as a function or constructor raises a <code>TypeError</code> exception.
 
 SpiderMonkey creates exactly one <code>Debugger.Environment</code> instance for each environment it presents via a given <code>Debugger</code> instance: if the debugger encounters the same environment through two different routes (perhaps two functions have closed over the same environment), SpiderMonkey presents the same <code>Debugger.Environment</code> instance to the debugger each time. This means that the debugger can use the <code>==</code> operator to recognize when two <code>Debugger.Environment</code> instances refer to the same environment in the debuggee, and place its own properties on a <code>Debugger.Environment</code> instance to store metadata about particular environments.
 
 (If more than one <code>Debugger</code> instance is debugging the same code, each <code>Debugger</code> gets a separate <code>Debugger.Environment</code> instance for a given environment. This allows the code using each <code>Debugger</code> instance to place whatever properties it likes on its own <code>Debugger.Object</code> instances, without worrying about interfering with other debuggers.)
 
-<code>Debugger.Environment</code> instances protect their referents from the garbage collector; as long as the <code>Debugger.Environment</code> instance is live, the referent remains live. Garbage collection has no debugger-visible effect on <code>Debugger.Environment</code> instances.
+<code>Debugger.Environment</code> instances protect their referents from the garbage collector; as long as the <code>Debugger.Environment</code> instance is live, the referent remains live. Garbage collection has no visible effect on <code>Debugger.Environment</code> instances.
 
 === Accessor Properties of the Debugger.Environment Prototype Object === 
 
@@ -745,10 +745,10 @@ A <code>Debugger.Environment</code> instance inherits the following accessor pro
 </ul>
 
 <dt>parent
-<dd>The environment that encloses this one, or <code>null</code> if this is the outermost environment. This is a accessor property with a getter, and no setter, inherited by instances.
+<dd>The environment that encloses this one (the "outer" environment, in ECMAScript terminology), or <code>null</code> if this is the outermost environment.
 
 <dt>object
-<dd>A <code>Debugger.Object</code> instance referring to the object whose properties this environment record reflects. If this is a declarative environment record, this accessor throws a <code>TypeError</code>.
+<dd>A <code>Debugger.Object</code> instance referring to the object whose properties this environment reflects. If this is a declarative environment record, this accessor throws a <code>TypeError</code> (since declarative environment records have no such object).
 </dl>
 
 === Function Properties of the Debugger.Environment Prototype Object ===
@@ -760,34 +760,32 @@ The methods described below may only be called with a <code>this</code> value re
 <dd>Return an array of strings giving the names of the identifiers bound by this environment. The result does not include the names of identifiers bound by enclosing environments.
 
 <dt>getVariable(<i>name</i>)
-<dd>Return the value of the variable bound to <i>name</i> in this environment, or <code>undefined</code> if this environment does not bind <i>name</i>. <i>Name</i> must be a string that is a valid identifier name. The result is a debuggee value.
+<dd>Return the value of the variable bound to <i>name</i> in this environment, or <code>undefined</code> if this environment does not bind <i>name</i>. <i>Name</i> must be a string that is a valid ECMAScript identifier name. The result is a debuggee value.
 
-This is not an [[#Invocation_Functions_and_.22debugger.22_Frames|invocation function]]; if this call would cause debuggee code to run (say, because the variable is an accessor property of the global object with a getter), this call throws a [[#The_Debugger.DebuggeeWouldRun_Exception|<code>Debugger.DebuggeeWouldRun</code>]] exception.
+This is not an [[#Invocation_Functions_and_.22debugger.22_Frames|invocation function]]; if this call would cause debuggee code to run (say, because the environment is an object environment, and <i>name</i> refers to an accessor property of the environment's object), this call throws a [[#The_Debugger.DebuggeeWouldRun_Exception|<code>Debugger.DebuggeeWouldRun</code>]] exception.
 
 <dt>setVariable(<i>name</i>, <i>value</i>)
-<dd>Store <i>value</i> as the value of the variable bound to <i>name</i> in this environment, creating the variable if it does not exist. <i>Name</i> must be a string that is a valid identifier name; <i>value</i> must be a debuggee value.
+<dd>Store <i>value</i> as the value of the variable bound to <i>name</i> in this environment, creating the variable if it does not exist. <i>Name</i> must be a string that is a valid ECMAScript identifier name; <i>value</i> must be a debuggee value.
 
 If this call would add a new variable to this environment, but implementation restrictions prevent SpiderMonkey from extending the environment as requested, this call throws an <code>Error</code> exception.
 
 This is not an [[#Invocation_Functions_and_.22debugger.22_Frames|invocation function]]; if this call would cause debuggee code to run, this call throws a [[#The_Debugger.DebuggeeWouldRun_Exception|<code>Debugger.DebuggeeWouldRun</code>]] exception.
 
 <dt>getVariableDescriptor(<i>name</i>)
-<dd>Return an property descriptor describing the variable bound to <i>name</i> in this environment, of the sort returned by <code>getOwnPropertyDescriptor</code>. <i>Name</i> must be a string whose value is a legitimate JavaScript variable name.
+<dd>Return an property descriptor describing the variable bound to <i>name</i> in this environment, of the sort returned by <code>Debugger.Object.prototype.getOwnPropertyDescriptor</code>. <i>Name</i> must be a string whose value is a valid ECMAScript identifier name.
 
 If this is an object environment record, this simply returns the descriptor for the given property of the environment's object. If this is a declarative environment record, this returns a descriptor reflecting the binding's mutability as the descriptor's <code>writable</code> property, and its deletability as the descriptor's <code>configurable</code> property. All declarative environment record bindings are marked as <code>enumerable</code>. <i>(This isn't great; the semantics of variables in declarative enviroments don't really match those of properties, so 
 writing code that operates properly on descriptors for either kind may be difficult.)</i>
 
 If there is no variable named <i>name</i> bound in this environment, throw a <code>ReferenceError</code>.
 
-This method does not search this environment's enclosing environments for bindings for <i>name</i>.
-
 <dt>defineVariable(<i>name</i>, <i>descriptor</i>)
-<dd>Create or reconfigure the variable bound to <i>name</i> in this environment according to <i>descriptor</i>. <i>Descriptor</i> is the sort of value returned by <code>getVariableDescriptor</code>. On success, return <code>undefined</code>; on failure, throw an appropriate exception. <i>Name</i> must be a string whose value is a legitimate JavaScript variable name.
+<dd>Create or reconfigure the variable bound to <i>name</i> in this environment according to <i>descriptor</i>. <i>Descriptor</i> is the sort of value returned by <code>getVariableDescriptor</code>. On success, return <code>undefined</code>; on failure, throw an appropriate exception. <i>Name</i> must be a string whose value is a valid ECMAScript identifier name.
 
 If implementation restrictions prevent SpiderMonkey from creating or reconfiguring the variable as requested, this call throws an <code>Error</code> exception.
 
 <dt>find(<i>name</i>)
-<dd>Return a reference to the innermost environment, starting with this environment, that binds <i>name</i>. If <i>name</i> is not in scope in this environment, return <code>null</code>. <i>Name</i> must be a string whose value is a legitimate JavaScript variable name.
+<dd>Return a reference to the innermost environment, starting with this environment, that binds <i>name</i>. If <i>name</i> is not in scope in this environment, return <code>null</code>. <i>Name</i> must be a string whose value is a valid ECMAScript identifier name.
 
 <dt>eval(<i>code</i>) <i>(future plan)</i>
 <dd>Evaluate <i>code</i> in this environment, and return a [[#Completion_Values|completion value]] describing how it completed. <i>Code</i> is a string. All extant handler methods, breakpoints, watchpoints, and so on remain active during the call. This function follows the [[#Invocation_Functions_and_.22debugger.22_Frames|invocation function conventions]].
