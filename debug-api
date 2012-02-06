@@ -114,11 +114,15 @@ A <code>Debugger</code> instance inherits the following accessor properties from
 This property gives debugger code a single point of control for disentangling itself from the debuggee, regardless of what sort of events or handlers or "points" we add to the interface. 
 
 <dt>uncaughtExceptionHook
-<dd>Either <code>null</code> or a function that SpiderMonkey calls when a call to a debug event handler, breakpoint handler, watchpoint handler, or similar function throws some exception, <i>debugger-exception</i>. Exceptions thrown in the debugger are not propagated to debuggee code; instead, SpiderMonkey calls this function, passing <i>debugger-exception</i> as its sole argument and the <code>Debugger</code> instance as the <code>this</code> value. This function should return a [[#Resumption_Values|resumption value]], which determines how the debuggee should continue. If the uncaught exception hook itself throws an exception, <i>uncaught-hook-exception</i>, SpiderMonkey throws an exception <i>confess-to-debuggee-exception</i> to the debuggee whose message blames the debugger, and includes textual descriptions of <i>uncaught-hook-exception</i> and <i>debugger-exception</i>. If this property's value is <code>null</code>, SpiderMonkey throws an exception to the debuggee whose message blames the debugger, and includes a textual description of <i>debugger-exception</i>.
+<dd>Either <code>null</code> or a function that SpiderMonkey calls when a call to a debug event handler, breakpoint handler, watchpoint handler, or similar function throws some exception, <i>debugger-exception</i>. Exceptions thrown in the debugger are not propagated to debuggee code; instead, SpiderMonkey calls this function, passing <i>debugger-exception</i> as its sole argument and the <code>Debugger</code> instance as the <code>this</code> value. This function should return a [[#Resumption_Values|resumption value]], which determines how the debuggee should continue.
+
+If the uncaught exception hook itself throws an exception, <i>uncaught-hook-exception</i>, SpiderMonkey throws a new error object, <i>confess-to-debuggee-exception</i>, to the debuggee whose message blames the debugger, and includes textual descriptions of <i>uncaught-hook-exception</i> and the original <i>debugger-exception</i>.
+
+If <code>uncaughtExceptionHook</code>'s value is <code>null</code>, SpiderMonkey throws an exception to the debuggee whose message blames the debugger, and includes a textual description of <i>debugger-exception</i>.
 
 Assigning anything other than a callable value or <code>null</code> to this property throws a <code>TypeError</code> exception.
 
-(The hope here is that some sort of backstop, even if imperfect, will make life easier for debugger developers, especially since an uncaughtExceptionHook has access to browser-level features like <code>alert</code>, which this API's implementation does not.)
+(This is not an ideal way to handle debugger bugs, but the hope here is that some sort of backstop, even if imperfect, will make life easier for debugger developers. For example, an uncaught exception hook may have access to browser-level features like the <code>alert</code> function, which this API's implementation does not, making it possible to present debugger errors to the developer in a way suited to the context.)
 </dl>
 
 === Debugger Handler Functions ===
