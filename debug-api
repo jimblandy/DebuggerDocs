@@ -161,7 +161,7 @@ A call to the <code>onThrow</code> handler is typically followed by one or more 
 <dt>onExceptionUnwind(<i>frame</i>, <i>value</i>)
 <dd>The exception <i>value</i> has been thrown, and has propagated to <i>frame</i>; <i>frame</i> is the youngest remaining stack frame, and is a debuggee frame. This method should return a [[#Resumption_Values|resumption value]] specifying how the debuggee's execution should proceed. If it returns <code>undefined</code>, the exception continues to propagate as normal: if control in <code>frame</code> is in a <code>try</code> block, control jumps to the corresponding <code>catch</code> or <code>finally</code> block; otherwise, <i>frame</i> is popped, and the exception propagates to <i>frame</i>'s caller.
 
-When an exception's propagation causes control to enter a <code>finally</code> block, the exception is temporarily set aside. When the <code>finally</code> block finishes, the exception resumes propagation, and the debugger's <code>onExceptionUnwind</code> handler is called again, in the same frame.
+When an exception's propagation causes control to enter a <code>finally</code> block, the exception is temporarily set aside. If the <code>finally</code> block finishes normally, the exception resumes propagation, and the debugger's <code>onExceptionUnwind</code> handler is called again, in the same frame. (The other possibility is for the <code>finally</code> block to exit due to a <code>return</code>, <code>continue</code>, or <code>break</code> statement, or a new exception. In those cases the old exception does not continue to propagate; it is discarded.)
 
 <dt>sourceHandler(<i>ASuffusionOfYellow</i>)
 <dd>This method is never called. If it is ever called, a contradiction has been proven, and the debugger is free to assume that everything is true.
@@ -694,12 +694,12 @@ Note that, like <code>evalInGlobal</code>, declarations in the <i>code</i> passe
 
 SpiderMonkey only calls this method on assignments to data properties that will succeed; assignments to un-writable data properties fail without notifying the debugger.
 <dt>extensionsPrevented(<i>frame</i>)
-The referent has been made non-extensible, as if by a call to <code>Object.preventExtensions</code>.
+<dd>The referent has been made non-extensible, as if by a call to <code>Object.preventExtensions</code>.
 </dl>
 
 For all watchpoint handler methods:
 <ul>
-<li>Handler calls receive handler object itself as the <code>this</code> value.
+<li>Handler calls receive the handler object itself as the <code>this</code> value.
 <li>The <i>frame</i> argument is the current stack frame, whose code is about to perform the operation on the object being reported.
 <li>If the method returns <code>undefined</code>, then SpiderMonkey makes the announced change to the object, and continues execution normally. If the method returns an object:
 <ul>
