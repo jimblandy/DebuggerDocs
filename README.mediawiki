@@ -1,0 +1,5 @@
+= Mozilla JavaScript Debugging Documentation =
+
+This is the specification for Mozilla's <code>Debugger</code> API, for implementing JavaScript debuggers and tools of that sort. Officially, this documentation is on the [[https://wiki.mozilla.org/Debugger|Mozilla wiki]], but we'd much rather use GitHub for revisions than MediaWiki's revision control, so we've checked it in here.
+
+We'll soon bring in the remote debugging protocol docs in here as well.
