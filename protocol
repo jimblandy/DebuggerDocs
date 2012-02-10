@@ -1,0 +1,879 @@
+<i>(Note: this page is a draft design of work not yet completed. It is written in the present tense to be easily promoted to documentation when implemented, and also to simplify the grammar.)</i>
+
+The Mozilla debugging protocol allows a debugger to connect to a browser, discover what sorts of things are present to debug or inspect, select JavaScript threads to watch, and observe and modify their execution. The protocol provides a unified view of JavaScript, DOM nodes, CSS rules, and the other technologies used in client-side web applications. The protocol ought to be sufficiently general to be extended for use with other sorts of clients (profilers, say) and servers (mail readers; random XULrunner applications).
+
+All communication between debugger (client) and browser (server) is in the form of JSON objects. This makes the protocol directly readable by humans, capable of graceful evolution, and easy to implement using stock libraries. In particular, it should be easy to create mock implementations for testing and experimentation.
+
+The protocol operates at the JavaScript level, not at the C++ or machine level, and assumes that the JavaScript implementation itself is healthy and responsive. The JavaScript program being executed may well have gone wrong, but the JavaScript implementation's internal state must not be corrupt. Bugs in the implementation may cause the debugger to fail; bugs in the interpreted program must not.
+
+= Actors =
+
+An <b>actor</b> is something on the server that can exchange JSON packets with the client. Every packet from the client specifies the actor to which it is directed, and every packet from the server indicates which actor sent it.
+
+Each server has a root actor, with which the client first interacts. The root actor can explain what sort of thing the server represents (browser; mail reader; etc.), and enumerate things available to debug: tabs, chrome, and so on. Each of these, in turn, is represented by an actor to which requests can be addressed. Both artifacts of the program being debugged, like JavaScript objects and stack frames, and artifacts of the debugging machinery, like breakpoints and watchpoints, are actors with whom packets can be exchanged.
+
+For example, a debugger might connect to a browser, ask the root actor to list the browser's tabs, and present this list to the developer. If the developer chooses some tabs to debug, then the debugger can send <tt>attach</tt> requests to the actors representing those tabs, to begin debugging.
+
+Actor names are JSON strings. The name of the root actor is <code>"root"</code>.
+
+To allow the server to reuse actor names and the resources they require, actors have limited lifetimes. All actors in a server form a tree, whose root is the root actor. Closing communications with an actor automatically closes communications with its descendants. For example, the actors representing a thread's stack frames are children of the actor representing the thread itself, so that when a debugger detaches from a thread, which closes the thread's actor, the frames' actors are automatically closed. This arrangement allows the protocol to mention actors liberally, without making the client responsible for explicitly closing every actor that has ever been mentioned.
+
+When we say that some actor <i>A</i> is a <b>child</b> of some actor <i>B</i>, we mean that <i>A</i> is a direct child of <i>B</i>, not a grandchild, great-grandchild, or the like. Similarly, <b>parent</b> means "direct parent". We use the terms <b>ancestor</b> and <b>descendent</b> to refer to those looser relationships.
+
+The root actor has no parent, and lives as long as the underlying connection to the client does; when that connection is closed, all actors are closed.
+
+Note that the actor hierarchy does not, in general, correspond to any particular hierarchy appearing in the debuggee. For example, although web workers are arranged in a hierarchy, the actors representing web worker threads are all children of the root actor: one might want to detach from a parent worker while continuing to debug one of its children, so it doesn't make sense to close communications with a child worker simply because one has closed communications with its parent.
+
+<i>(We are stealing the "actor" terminology from Mozilla's [[IPDL]], to mean, roughly, "things participating in the protocol". However, IPDL does much more with the idea than we do: it treats both client and server as collections of actors, and uses that detail to statically verify properties of the protocol. In contrast, the debugging protocol simply wants a consistent way to indicate the entities to which packets are directed.)</i>
+
+= Packets =
+
+The protocol is carried by a reliable, bi-directional byte stream; data sent in both directions consists of JSON objects, called packets. A packet is a top-level JSON object, not contained inside any other value.
+
+Every packet sent from the client has the form:
+
+  { "to":<i>actor</i>, "type":<i>type</i>, ... }
+
+where <i>actor</i> is the name of the actor to whom the packet is directed and <i>type</i> is a string specifying what sort of packet it is. Additional properties may be present, depending on <i>type</i>.
+
+Every packet sent from the server has the form:
+
+  { "from":<i>actor</i>, ... }
+
+where <i>actor</i> is the name of the actor that sent it. The packet may have additional properties, depending on the situation.
+
+If a packet is directed to an actor that no longer exists, the server sends a packet to the client of the following form:
+
+  { "from":<i>actor</i>, "error":"noSuchActor" }
+
+where <i>actor</i> is the name of the non-existent actor. (It is strange to receive messages from actors that do not exist, but the client evidently believes that actor exists, and this reply allows the client to pair up the error report with the source of the problem.)
+
+Clients should silently ignore packet properties they do not recognize. We expect that, as the protocol evolves, we will specify new properties that can appear in existing packets, and experimental implementations will do the same.
+
+= Requests and Replies =
+
+In this protocol description, a <b>request</b> is a packet sent from the client which always elicits a single packet from the recipient, the <b>reply</b>. These terms indicate a simple pattern of communication: at any given time, either the client or actor is permitted to send a packet to the other, but never both.
+
+The client's communication with each actor is treated separately: the client may send a request to one actor, and then send a request to a different actor before receiving a reply from the first.
+
+Packets not described as requests or replies are part of some more complicated interaction, which should be spelled out in more detail.
+
+Any actor can reply to a request it is unable to carry out with an <b>error reply</b> of the form:
+
+  { "from":<i>actor</i>, "error":<i>name</i>, "message":<i>message</i> }
+
+where <i>name</i> is a JSON string naming what went wrong, and <i>message</i> is an English error message. Error <i>name</i>s are specified by the protocol; the client can use the name to identify which error condition arose. The <i>message</i> may vary from implementation to implementation, and should only be displayed to the user as a last resort, as the server lacks enough information about the user interface context to provide appropriate messages.
+
+If an actor receives a packet whose type it does not recognize, it sends an error reply of the form:
+
+  { "from":<i>actor</i>, "error":"unrecognizedPacketType", "message":<i>message</i> }
+
+where <i>message</i> provides details to help debugger developers understand what went wrong: what kind of actor <i>actor</i> is; the packet received; and so on.
+
+= Grips =
+
+A grip is a JSON value that refers to a specific JavaScript value in the debuggee. Grips appear anywhere an arbitrary value from the debuggee needs to be conveyed to the client: stack frames, object property lists, lexical environments, <tt>paused</tt> packets, and so on.
+
+For mutable values like objects and arrays, grips do not merely convey the value's current state to the client. They also act as references to the original value, by including an actor to which the client can send messages to modify the value in the debuggee.
+
+A grip has one of the following forms:
+
+  <i>value</i>
+
+where <i>value</i> is a string, a number, or a boolean value. For these types of values, the grip is simply the JSON form of the value.
+
+  { "type":"null" }
+
+This represents the JavaScript <tt>null</tt> value. (The protocol does not represent JavaScript <tt>null</tt> simply by the JSON <tt>null</tt>, for the convenience of clients implemented in JavaScript: this representation allows such clients to use <tt>typeof(<i>grip</i>) == "object"</tt> to decide whether the grip is simple or not.)
+
+  { "type":"undefined" }
+
+This represents the JavaScript <tt>undefined</tt> value. (<tt>undefined</tt> has no direct representation in JSON.)
+
+  { "type":"object", "class":<i>className</i>, "actor":<i>actor</i> }
+
+This represents a JavaScript object whose class is <i>className</i>. (Arrays and functions are treated as objects for the sake of forming grips.) <i>Actor</i> can be consulted for the object's contents, as explained below.
+
+  { "type":"longString", "initial":<i>initial</i>, "length":<i>length</i>, "actor":<i>actor</i> }
+
+This represents a very long string, where "very long" is defined at the server's discretion. <i>Initial</i> is some initial portion of the string, <i>length</i> is the string's full length, and <i>actor</i> can be consulted for the rest of the string, as explained below.
+
+For example, the following table shows some JavaScript expressions and the grips that would represent them in the protocol:
+
+{| frame="box" rules="all" cellpadding="8"
+! JavaScript Expression
+! Grip
+|-
+| 42
+| 42
+|-
+| true
+| true
+|-
+| "nasu"
+| "nasu"
+|-
+| (void 0)
+| { "type":"undefined" }
+|- 
+| ({x:1})
+| { "type":"object", "class":"Object", "actor":"24" }
+|}
+
+Garbage collection will never free objects visible to the client via the protocol. Thus, actors representing JavaScript objects are effectively garbage collection roots.
+
+== Objects ==
+
+While a thread is paused, the client can send requests to the actors appearing in object grips to examine the objects they represent in more detail.
+
+=== Property Descriptors ===
+
+Protocol requests that describe objects' properties to the client often use <b>descriptors</b>, JSON values modeled after ECMAScript 5's property descriptors, to describe individual properties.
+
+A descriptor has the form:
+
+  { "enumerable":<i>enumerable</i>, "configurable":<i>configurable</i>, ... }
+
+where <i>enumerable</i> and <i>configurable</i> are boolean values indicating whether the property is enumerable and configurable, and additional properties are present depending on what sort of property it is.
+
+A descriptor for a data property has the form:
+
+  { "enumerable":<i>enumerable</i>, "configurable":<i>configurable</i>,
+    "value":<i>value</i>, "writeable":<i>writeable</i> }
+
+where <i>value</i> is a grip on the property's value, and <i>writeable</i> is a boolean value indicating whether the property is writeable.
+
+A descriptor for an accessor property has the form:
+
+  { "enumerable":<i>enumerable</i>, "configurable":<i>configurable</i>,
+    "get":<i>getter</i>, "set":<i>setter</i> }
+
+where <i>getter</i> and <i>setter</i> are grips on the property's getter and setter functions. These may be <tt>{&nbsp;"type":"undefined"&nbsp;}</tt> if the property lacks the given accessor function.
+
+For example, if the JavaScript program being debugged evaluates the expression:
+
+  ({x:10, y:"kaiju", get a() { return 42; }})
+
+then a grip on this value would have the form:
+
+  { "type":"object", "class":"Object", "actor":<i>actor</i> }
+
+and sending a [[#Finding_An_Object's_Prototype_And_Properties|"prototypeAndProperties"]] request to <i>actor</i> would produce the following reply:
+
+  { "from":<i>actor</i>, "prototype":{ "type":"object", "class":"Object", "actor":<i>objprotoActor</i> },
+    "ownProperties":{ "x":{ "enumerable":true, "configurable":true, "writeable":true, "value":10 },
+                       "y":{ "enumerable":true, "configurable":true, "writeable":true, "value":"kaiju" },
+                       "a":{ "enumerable":true, "configurable":true,
+                             "get":{ "type":"object", "class":"Function", "actor":<i>getterActor</i> },
+                             "set":{ "type":"undefined" }
+                           }
+                     }
+  }
+
+=== Finding An Object's Prototype And Properties ===
+
+To examine an object's prototype and properties, a client can send the object's grip's actor a request of the form:
+
+  { "to":<i>gripActor</i>, "type":"prototypeAndProperties" }
+
+to which the grip actor replies:
+
+  { "from":<i>gripActor</i>, "prototype":<i>prototype</i>, "ownProperties":<i>ownProperties</i> }
+
+where <i>prototype</i> is a grip on the object's prototype (possibly <tt>{&nbsp;"type":"null"&nbsp;}</tt>), and <i>ownProperties</i> has the form:
+
+  { <i>name</i>:<i>descriptor</i>, ... }
+
+with a <i>name</i>:<i>descriptor</i> pair for each of the object's own properties.
+
+<i>TODO: What about objects with many properties?</i>
+
+=== Finding an Object's Prototype ===
+
+To find an object's prototype, a client can send the object's grip's actor a request of the form:
+
+  { "to":<i>gripActor</i>, "type":"prototype" }
+
+to which the grip actor replies:
+
+  { "from":<i>gripActor</i>, "prototype":<i>prototype</i> }
+
+where <i>prototype</i> is a grip on the object's prototype (possibly <tt>{ "type":"null" }</tt>).
+
+=== Listing an Object's Own Properties' Names ===
+
+To list an object's own properties' names, a client can send the object's grip's actor a request of the form:
+
+  { "to":<i>gripActor</i>, "type":"ownPropertyNames" }
+
+to which the grip actor replies:
+
+  { "from":<i>gripActor</i>, "ownPropertyNames":[ <i>name</i>, ... ] }
+
+where each <i>name</i> is a string naming an own property of the object.
+
+=== Finding Descriptors For Single Properties ===
+
+To obtain a descriptor for a particular property of an object, a client can send the object's grip's actor a request of the form:
+
+  { "to":<i>gripActor</i>, "type":"property", "name":<i>name</i> }
+
+to which the grip actor replies:
+
+  { "from":<i>gripActor</i>, "descriptor":<i>descriptor</i> }
+
+where <i>descriptor</i> is a descriptor for the own property of the object named <i>name</i>, or <tt>null</tt> if the object has no such own property.
+
+A property descriptor has the form:
+
+  { "configurable":<i>configurable</i>, "enumerable":<i>enumerable</i>, ... }
+
+where <i>configurable</i> and <i>enumerable</i> are boolean values. <i>Configurable</i> is true if the property can be deleted or have its attributes changed. <i>Enumerable</i> is true if the property will be enumerated by a <code>for-in</code> enumeration.
+
+Descriptors for value properties have the form:
+
+  { "configurable":<i>configurable</i>, "enumerable":<i>enumerable</i>,
+    "writable":<i>writable</i>, "value":<i>value</i> }
+
+where <i>writable</i> is <code>true</code> if the property's value can be written to; <i>value</i> is a grip on the property's value; and <i>configurable</i> and <i>enumerable</i> are as described above.
+
+Descriptors for accessor properties have the form:
+
+  { "configurable":<i>configurable</i>, "enumerable":<i>enumerable</i>,
+    "get":<i>get</i>, "set":<i>set</i> }
+
+where <i>get</i> and <i>set</i> are grips on the property's getter and setter functions; either or both are omitted if the property lacks the given accessor function. <i>Configurable</i> and <i>enumerable</i> are as described above.
+
+<i>TODO: assign to value property</i>
+
+<i>TODO: special stuff for arrays</i>
+
+<i>TODO: special stuff for functions</i>
+
+<i>TODO: find function's source position</i>
+
+<i>TODO: get function's named arguments, in order</i>
+
+<i>TODO: descriptors for Harmony proxies</i>
+
+=== Functions ===
+
+If an object's class as given in the grip is <code>"Function"</code>, then the grip's actor responds to the messages given here.
+
+  { "to":<i>functionGripActor</i>, "type":"nameAndParameters" }
+
+This requests the name of the function represented by <i>functionGripActor</i>, and the names of its parameters. The reply has the form:
+
+  { "from":<i>functionGripActor</i>, "name":<i>name</i>, "parameters":[ <i>parameter</i>, ... ] }
+
+where <i>name</i> is the name of the function, or <code>null</code> if the function is anonymous, and each <i>parameter</i> is the name of a formal parameter to the function as a string. If the function takes destructuring arguments, the <i>parameter</i> is a structure of JSON array and object forms matching the form of the destructuring arguments.
+
+  { "to":<i>functionGripActor</i>, "type":"scope" }
+
+Return the lexical environment over which the function has closed. The reply has the form:
+
+  { "from":<i>functionGripActor</i>, "scope":<i>environment</i> }
+
+where <i>environment</i> is a [[#Lexical_Environments|lexical environment]].
+
+  { "to":<i>functionGripActor</i>, "type":"decompile", "pretty":<i>pretty</i> }
+
+Return JavaScript source code for a function equivalent to the one represented by <i>functionGripActor</i>. If the optional <code>pretty</code> parameter is present and <i>pretty</i> is <code>true</code>, then produce indented source code with line breaks. The reply has the form:
+
+  { "from":<i>functionGripActor</i>, "decompiledCode":<i>code</i> }
+
+where <i>code</i> is a string.
+
+== Long Strings ==
+
+The client can find the full contents of a long string by sending a request to the long string grip actor of the form:
+
+  { "to":<i>gripActor</i>, "type":"substring", "start":<i>start</i>, "length":<i>length</i> }
+
+where <i>start</i> and <i>length</i> are integers. This requests the substring <i>length</i> characters long, starting at the <i>start</i>'th character. The actor replies as follows:
+
+  { "from":<i>gripActor</i>, "substring":<i>string</i> }
+
+where <i>string</i> is the requested portion of the string the actor represents.
+
+Like object grip actors, long string grip actors must only receive messages from the client while the thread is in the <b>Paused</b> state.
+
+== Grip Lifetimes ==
+
+Most grips are <b>pause-lifetime</b> grips: they last only while the JavaScript thread is paused, and become invalid as soon as the debugger allows the thread to resume execution. (The actors in pause-lifetime grips are children of an actor that is closed when the thread resumes, or is detached from.) This arrangement allows the protocol to use grips freely in responses without requiring the client to remember and close them all.
+
+However, in some cases the client may wish to retain a reference to an object while the debuggee runs. For example, a panel displaying objects selected by the user must update its view of the objects each time the debuggee pauses. To carry this out, the client can promote a pause-lifetime grip to a <b>thread-lifetime</b> grip, which lasts until the thread is detached from or exits. Actors in thread-lifetime grips are children of the thread actor. When the client no longer needs a thread-lifetime grip, it can explicitly release it.
+
+Both pause-lifetime and thread-lifetime grips are garbage collection roots.
+
+To promote a pause-lifetime grip to a thread-lifetime grip, the client sends a packet of the form:
+
+  { "to":<i>gripActor</i>, "type":"threadGrip" }
+
+where <i>gripActor</i> is the actor from the existing pause-lifetime grip. The grip actor will reply:
+
+  { "from":<i>gripActor</i>, "threadGrip":<i>threadGrip</i> }
+
+where <i>threadGrip</i> is a new grip on the same object, but whose actor is parented by the thread actor, not the pause actor.
+
+The client can release a thread-lifetime grip by sending the grip actor a request of the form:
+
+  { "to":<i>gripActor</i>, "type":"release" }
+
+The grip actor will reply, simply:
+
+  { "from":<i>gripActor</i> }
+
+This closes the grip actor.
+
+The client can release many thread-lifetime grips in a single operation by sending the thread actor a request of the form:
+
+  { "to":<i>thread</i>, "type":"releaseMany", "actors":[ <i>gripActor</i>, ... ] }
+
+where each <i>gripActor</i> is the name of a child of <i>thread</i> that should be freed. The thread actor will reply, simply:
+
+  { "from":<i>thread</i> }
+
+Regardless of the lifetime of a grip, the client may only send messages to grip actors while the thread to which they belong is paused; the client's interaction with values cannot take place concurrently with the thread.
+
+= Source Locations =
+
+Many packets refer to particular locations in source code: breakpoint requests specify where the breakpoint should be set; stack frames show the current point of execution; and so on.
+
+Descriptions of source code locations (written as <i>location</i> in packet descriptions) can take one of the following forms:
+
+  { "url":<i>url</i>, "line":<i>line</i>, "column":<i>column</i> }
+
+This refers to line <i>line</i>, column <i>column</i> of the source code loaded from <i>url</i>. Line and column numbers start with 1. If <i>column</i> or <i>line</i> are omitted, they default to 1.
+
+  { "eval":<i>location</i>, "id":<i>id</i>, "line":<i>line</i>, "column":<i>column</i> }
+
+This refers to line <i>line</i>, column <i>column</i> of the source code passed to the call to eval at <i>location</i>. To distinguish the different texts passed to eval, each is assigned a unique integer, <i>id</i>.
+
+  { "function":<i>location</i>, "id":<i>id</i>, "line":<i>line</i>, "column":<i>column</i> }
+
+This refers to line <i>line</i>, column <i>column</i> of the source code passed to the call to the <tt>Function</tt> constructor at <i>location</i>. To distinguish the different texts passed to the <tt>Function</tt> constructor, each is assigned a unique integer, <i>id</i>.
+
+As indicated, locations can be nested. A location like this one:
+
+  { "eval":{ "eval":{ "url":"file:///home/example/sample.js", "line":20 }
+             "id":300, "line":30 }
+    "id":400, "line":40 }
+
+refers to line 40 of the code passed to the call to eval occurring on line 30 of the code passed to the call to eval on line 20 of <tt>file:///home/example/sample.js</tt>.
+
+= The Root Actor =
+
+When the connection to the server is opened, the root actor opens the conversation with the following packet:
+
+  { "from":"root", "applicationType":<i>appType</i>, "traits":<i>traits</i>, ...}
+
+The root actor's name is always <code>"root"</code>. <i>appType</i> is a string indicating what sort of program the server represents. There may be more properties present, depending on <i>appType</i>.
+
+<i>traits</i> is an object describing protocol variants this server supports that are not convenient for the client to detect otherwise. The property names present indicate what traits the server has; the properties' values depend on their names. This version of the protocol defines no traits, so <i>traits</i> must be an object with no properties, <tt>{}</tt>.
+
+For web browsers, the introductory packet should have the following form:
+
+  { "from":"root", "applicationType":"browser", "traits":<i>traits</i> }
+
+== Listing Top-Level Browsing Contexts ==
+
+To get a list of the top-level browsing contexts (tabs) present in a browser, a client should send a request like the following to the root actor:
+
+  { "to":"root", "type":"listContexts" }
+
+The reply should have the form:
+
+  { "from":"root", "contexts":[<i>context</i>...], selected:<i>index</i> }
+
+The <tt>contexts</tt> property's value is an array with one element for each top-level browsing context present in the browser, and <i>index</i> is the index within that list of the browsing context the user is currently interacting with. Each <i>context</i> has the following form:
+
+  { "actor":<i>actor</i>, "title":<i>title</i>, "url":<i>url</i> }
+
+<i>actor</i> is the actor representing that top-level browsing context; <i>title</i> is the context's document's title, and <i>url</i> is the context's document's URL.
+
+Clients should send "listContexts" requests only to root actors that have identified themselves as browsers.
+
+Actor names given in a list-contexts reply are children of the root actor. They remain valid at least until the next list-contexts request is received. If the client attaches to a context actor, its name is valid at least until the client detaches from the context and receives a "detached" packet from the context, or until the client sends a "release" packet to the context. (These packets are described in detail in [[#Interacting_with_Thread-Like_Actors|Interacting with Thread-Like Actors]].)
+
+For example, upon connection to a web browser visiting two pages at example.com, the root actor's introductory packet might look like this:
+
+  { "from":"root", "applicationType":"browser",
+    "contexts":[ { "actor":"context1", "title":"Fruits",
+                   "url":"http://www.example.com/fruits/" },
+                 { "actor":"context2", "title":"Bats",
+                   "url":"http://www.example.com/bats/" }]}
+
+<i>(This may not be the right information to provide in these packets; suggestions very welcome. The point here is to give the debugger enough information to select which context it would like to debug without having to do too many round trips. Round trips are bad for UI responsiveness, but large packets are probably not a problem, so whatever would help to add, we should add.)</i>
+
+<i>There are other, more important ways this may be wrong-headed. In traditional Firefox, there is only one thread for all chrome and content. One can't attach to different tabs and then continue them independently; they're all sharing the same stack. This will still be true to some extent even when we have out-of-process content, because you'll necessarily have groups of tabs sharing a thread. The thread actor interactions described below seem like the right way to interact with a thread, but we need to explain how we select some parts of the browser to debug and others to ignore.</i>
+
+= Interacting with Thread-Like Actors =
+
+Actors representing independent threads of JavaScript execution, like browsing contexts and web workers, are collectively known as "threads". Interactions with actors representing threads follow a more complicated communication pattern.
+
+A thread is always in one of the following states:
+
+* <b>Detached</b>: the thread is running freely, and not presently interacting with the debugger. Detached threads run, encounter errors, and exit without exchanging any sort of messages with the debugger. A debugger can attach to a thread, putting it in the <b>Paused</b> state. Or, a detached thread may exit on its own, entering the <b>Exited</b> state.
+
+* <b>Running</b>: the thread is running under the debugger's observation, executing JavaScript code or possibly blocked waiting for input. It will report exceptions, breakpoint hits, watchpoint hits, and other interesting events to the client, and enter the <b>Paused</b> state. The debugger can also interrupt a running thread; this elicits a response and puts the thread in the <b>Paused</b> state. A running thread may also exit, entering the <b>Exited</b> state.
+
+* <b>Paused</b>: the thread has reported a pause to the client and is awaiting further instructions. In this state, a thread can accept requests and send replies. If the client asks the thread to continue or step, it returns to the <b>Running</b> state. If the client detaches from the thread, it returns to the <b>Detached</b> state.
+
+* <b>Exited</b>: the thread has ceased execution, and will disappear. The resources of the underlying thread may have been freed; this state merely indicates that the actor's name is not yet available for reuse. When the actor receives a "release" packet, the name may be reused.
+
+[[File:thread-states.png]]
+
+These interactions are meant to have certain properties:
+
+* At no point may either client or server send an unbounded number of packets without receiving a packet from its counterpart. This avoids deadlock without requiring either side to buffer an arbitrary number of packets per actor.
+
+* In states where a transition can be initiated by either the debugger or the thread, it is always clear to the debugger which state the thread actually entered, and for what reason.<p>For example, if the debugger interrupts a running thread, it cannot be sure whether the thread stopped because of the interruption, paused of its own accord (to report a watchpoint hit, say), or exited. However, the next packet the debugger receives will either be "paused", or "exited", resolving the ambiguity.</p><p>Similarly, when the debugger attaches to a thread, it cannot be sure whether it has succeeded in attaching to the thread, or whether the thread exited before the "attach" packet arrived. However, in either case the debugger can expect a disambiguating response: if the attach suceeded, it receives an "attached" packet; and in the second case, it receives an "exit" packet.</p><p>To support this property, the thread ignores certain debugger packets in some states (the "interrupt" packet in the <b>Paused</b> and <b>Exited</b> states, for example). These cases all handle situations where the ignored packet was preempted by some thread action.</p>
+
+Note that the rules here apply to the client's interactions with each thread actor separately. A client may send an "interrupt" to one thread actor while awaiting a reply to a request sent to a different thread actor.
+
+<i>TODO: What about user selecting nodes in displayed content? Should those be eventy things the client can receive in the "paused" state? What does that mean for the "request"/"reply" pattern?</i>
+
+== Attaching To a Thread ==
+
+To attach to a thread, the client sends a packet of the form:
+
+  { "to":<i>thread</i>, "type":"attach" }
+
+Here, <i>thread</i> is the actor representing the thread, perhaps a browsing context from a "listContexts" reply. This packet causes the thread to pause its execution, if it does not exit of its own accord first. The thread responds in one of two ways:
+
+  { "from":<i>thread</i>, "type":"paused", "why":{ "type":"attached" }, ... }
+
+The thread is now in the <b>Paused</b> state, because the client has attached to it. The actor name <i>thread</i> remains valid until the client detaches from the thread or acknowledges a thread exit. This is an ordinary <code>"paused"</code> packet, whose form and additional properties are as described in [[#Thread_Pauses|Thread Pauses]], below.
+
+  { "from":<i>thread</i>, "type":"exited" }
+
+This indicates that the thread exited on its own before receiving the "attach" packet. The thread is now in the <b>Exited</b> state. The client should follow by sending a "release" packet; see [[#Exiting_Threads|Exiting Threads]], below.
+
+If the client sends an <code>"attach"</code> packet to a thread that is not in the <b>Detached</b> or <b>Exited</b> state, the actor sends an error reply of the form:
+
+  { "from":<i>thread</i>, "error":"wrongState", "message":<i>message</i> }
+
+where <i>message</i> details which state the thread was in instead (to make debugging debuggers easier). In this case, the thread's state is unaffected.
+
+== Detaching From a Thread ==
+
+To detach from a thread, the client sends a packet of the form:
+
+  { "to":<i>thread</i>, "type":"detach" }
+
+The thread responds in one of three ways:
+
+  { "from":<i>thread</i>, "type":"detached" }
+
+This indicates that the client has detached from the thread. The thread is now in the <b>Detached</b> state: it can run freely, and no longer reports events to the client. Communications with <i>thread</i> are closed, and the actor name is available for reuse. If the thread had been in the <b>Paused</b> state, the pause actor is closed (because the pause actor is a child of <i>thread</i>). 
+
+  { "from":<i>thread</i>, "type":"paused", ... }
+  { "from":<i>thread</i>, "type":"detached" }
+
+This series of packets indicates that the thread paused of its own accord (for the reason given by the additional properties of the "paused" packet), and only then received the "detach" packet. As above, this indicates that the thread is in the <b>Detached</b> state, the just-created pause actor is closed, and the actor name is available for reuse.
+
+  { "from":<i>thread</i>, "type":"exited" }
+
+This indicates that the thread exited on its own before receiving the "detach" packet. The client should follow by sending a "release" packet; see [[#Exiting_Threads|Exiting Threads]], below.
+
+Detaching from a thread causes all breakpoints, watchpoints, and other debugging-related state to be forgotten.
+
+If the client sends a <code>"detach"</code> packet to a thread that is not in the <b>Running</b>, <b>Paused</b>, or <b>Exited</b> state, the actor sends an error reply of the form:
+
+  { "from":<i>thread</i>, "error":"wrongState", "message":<i>message</i> }
+
+where <i>message</i> details which state the thread was in instead (to make debugging debuggers easier). In this case, the thread's state is unaffected.
+
+== Running Threads ==
+
+Once the client has attached to a thread, it is in the <b>Running</b> state. In this state, four things can happen:
+
+* The thread can hit a breakpoint or watchpoint, or encounter some other condition of interest to the client.
+* The thread can exit.
+* The client can detach from the thread.
+* The client can interrupt the running thread.
+
+Note that a client action can occur simultaneously with a thread action. The protocol is designed to avoid ambiguities when both client and thread act simultaneously.
+
+== Thread Pauses ==
+
+If the thread pauses to report an interesting event to the client, it sends a packet of the form:
+
+  { "from":<i>thread</i>, "type":"paused", "actor":<i>pause-actor</i>, "why":<i>reason</i>,
+    "currentFrame":<i>frame</i>, "poppedFrames":[<i>poppedFrame</i>...] }
+
+This indicates that the thread has entered the <b>Paused</b> state, and explains where and why.
+
+<i>Pause-actor</i> is a "pause actor", representing this specific pause of the thread; it lives until the thread next leaves the <b>Paused</b> state. The pause actor parents actors referring to values and other entities uncovered during this pause; when the thread resumes, those actors are automatically closed. This relieves the client from the responsibility to explicitly close every actor mentioned during the pause.
+
+Since actors in value grips are parented by the pause actor, this means that those grips become invalid when the thread resumes, or is detached from; it is not possible to take a grip from one pause and use it in the next. To create a grip that remains valid between pauses, see [[#Grip_Lifetimes|Grip Lifetimes]].
+
+The <i>currentFrame</i> value describes the top frame on the JavaScript stack; see [[#Listing_Stack_Frames|Listing Stack Frames]], below.
+
+The <code>"poppedFrames"</code> property is an array of frame actor names, listing the actors for all frames that were live as of the last pause, but have since been popped. If no frames have been popped, or if this is the first pause for this thread, then this property's value is the empty array.
+
+The <i>reason</i> value describes why the thread paused. It has one of the following forms:
+
+  { "type":"attached" }
+
+The thread paused because the client attached to it.
+
+  { "type":"interrupted" }
+
+The thread stopped because it received an "interrupt" packet from the client.
+
+  { "type":"resumeLimit" }
+
+The client resumed the thread with a "resume" packet that included a <tt>resumeLimit</tt> property, and the thread paused because the given <i>limit</i> was met.
+
+  { "type":"debuggerStatement" }
+
+The thread stopped because it executed a JavaScript "debugger" statement.
+
+  { "type":"breakpoint", "actors":[<i>breakpoint-actor</i>...] }
+
+The thread stopped at the breakpoints represented by the given actors.
+
+  { "type":"watchpoint", "actors":[<i>watchpoint-actor</i>...] }
+
+The thread stopped at the watchpoints represented by the given actors.
+
+<i>TODO: This should provide more details about the watchpoint in the packet, instead of incurring another round-trip before we can display anything helpful.</i>
+
+  { "type":"clientEvaluated", "value":<i>grip</i> }
+
+The client's prior <tt>clientEvaluate</tt> command has completed normally; <i>grip</i> is a grip on the expression's value. See [[#Evaluating_Source-Language_Expressions|Evaluating Source-Language Expressions]] for details.
+
+  { "type":"clientEvaluated", "exception":<i>grip</i> }
+
+The client's prior <tt>clientEvaluate</tt> command has completed abruptly; <i>grip</i> is the uncaught exception value. See [[#Evaluating_Source-Language_Expressions|Evaluating Source-Language Expressions]] for details.
+
+== Resuming a Thread ==
+
+If a thread is in the <b>Paused</b> state, the client can resume it by sending a packet of the following form:
+
+  { "to":<i>thread</i>, "type":"resume", "resumeLimit":<i>limit</i> }
+
+This puts the thread in the <b>Running</b> state. The thread will pause again for breakpoint hits, watchpoint hits, throw watches, frame pop watches, and other standing pause requests.
+
+In addition, if the optional <tt>resumeLimit</tt> property is present, then the thread should also pause when <i>limit</i> is reached. <i>Limit</i> must have one of the following forms:
+
+  { "type":"next" }
+
+The thread should pause:
+<ul>
+<li>just before the current frame is popped, whether by throwing an exception or returning a value; or
+<li>when control in the current frame reaches a different statement than the one it is currently at.
+</ul>
+Note that execution in frames younger than the current frame never meets these conditions, so a <tt>"next"</tt> limit steps over calls, generator-iterator invocations, and so on.
+
+  { "type":"step" }
+
+The thread should pause:
+<ul>
+<li>just before the current frame is popped, whether by throwing an exception or returning a value; or
+<li>just after a new frame is pushed; or
+<li>when control in the current frame reaches a different statement than the one it is currently
+at.
+</ul>
+This is the same as <tt>"next"</tt>, except that it steps into calls.
+
+  { "type":"finish" }
+
+The thread should pause just before the current frame is popped, whether by throwing an exception or returning a value.
+
+When a thread pauses because a limit was reached, the "paused" packet's <i>reason</i> will have a type of <tt>"resumeLimit"</tt>.
+
+A resume limit applies only to the current resumption; once the thread pauses, whether because the limit was reached or some other event occurred&mdash;a breakpoint hit, for example&mdash;the resume limit is no longer in effect.
+
+If no <tt>"resumeLimit"</tt> property appears in the "resume" packet, then the thread should run until some standing pause condition is met (a breakpoint is hit; a watchpoint triggers; or the like).
+
+A "resume" packet closes the pause actor the client provided in the "paused" packet that began the pause.
+
+If the client sends a <code>"resume"</code> packet to a thread that is not in the <b>Paused</b> state, the actor sends an error reply of the form:
+
+  { "from":<i>thread</i>, "error":"wrongState", "message":<i>message</i> }
+
+where <i>message</i> details which state the thread was in instead (to make debugging debuggers easier). In this case, the thread's state is unaffected.
+
+== Interrupting a Thread ==
+
+If a thread is in the <b>Running</b> state, the client can cause it to pause where it is by sending a packet of the following form:
+
+  { "to":<i>thread</i>, "type":"interrupt" }
+
+The thread responds in one of two ways:
+
+  { "from":<i>thread</i>, "type":"paused", "why":<i>reason</i>, ... }
+
+This indicates that the thread stopped, and is now in the <b>Paused</b> state. If <i>reason</i> is <tt>{ "type":"interrupted" }</tt>, then the thread paused due to the client's <tt>interrupt</tt> packet. Otherwise, the thread paused of its own accord before receiving the <tt>interrupt</tt> packet, and will ignore the <tt>interrupt</tt> packet when it receives it. In either case, this is an ordinary <code>"paused"</code> packet, whose form and additional properties are as described in [[#Thread_Pauses|Thread Pauses]], above.
+
+  { "from":<i>thread</i>, "type":"exited" }
+
+This indicates that the thread exited before receiving the client's <tt>interrupt</tt> packet, and is now in the <b>Exited</b> state. See [[#Exiting_Threads|Exiting Threads]], below.
+
+If the client sends an <code>"interrupt"</code> packet to a thread that is not in the <b>Running</b>, <b>Paused</b>, or <b>Exited</b> state, the actor sends an error reply of the form:
+
+  { "from":<i>thread</i>, "error":"wrongState", "message":<i>message</i> }
+
+where <i>message</i> details which state the thread was in instead (to make debugging debuggers easier). In this case, the thread's state is unaffected.
+
+== Exiting Threads ==
+
+When a thread in the <b>Running</b> state exits, it sends a packet of the following form:
+
+  { "from":<i>thread</i>, "type":"exited" }
+
+At this point, the thread can no longer be manipulated by the client, and most of the thread's resources may be freed; however, the thread actor name must remain alive, to handle stray <tt>interrupt</tt> and <tt>detach</tt> packets. To allow the last trace of the thread to be freed, the client should send a packet of the following form:
+
+  { "to":<i>thread</i>, "type":"release" }
+
+This acknowledges the exit and allows the thread actor name, <i>thread</i>, to be reused for other actors.
+
+= Inspecting Paused Threads =
+
+When a thread is in the <b>Paused</b> state, the debugger can make requests to inspect its stack, lexical environment, and values.
+
+== Listing Stack Frames ==
+
+To inspect the thread's JavaScript stack, the client can send the following request:
+
+  { "to":<i>thread</i>, "type":"frames", "start":<i>start</i>, "count":<i>count</i> }
+
+The <tt>start</tt> and <tt>count</tt> properties are optional. If present, <i>start</i> gives the number of the youngest stack frame the reply should describe, where the youngest frame on the stack is frame number zero; if absent, <i>start</i> is taken to be zero. If present, <i>count</i> specifies the maximum number of frames the reply should describe; if absent, it is taken to be infinity. (Clients should probably avoid sending <tt>frames</tt> requests with no <i>count</i>, to avoid being flooded by frames from unbounded recursion.)
+
+The thread replies as follows:
+
+  { "from":<i>thread</i>, "frames":[<i>frame</i> ...] }
+
+where each <i>frame</i> has the form:
+
+  { "actor":<i>actor</i>, "depth":<i>depth</i>, "type":<i>type</i>, "this":<i>this</i>, ... }
+
+where:
+
+* <i>actor</i> is the name of an actor representing this frame;
+* <i>depth</i> is the number of this frame, starting with zero for the youngest frame on the stack;
+* <i>type</i> is a string indicating what sort of frame this is; and
+* <i>this</i> is a grip on the value of <tt>this</tt> for this call.
+
+The frame may have other properties, depending on <i>type</i>.
+
+All actors mentioned in the frame or grips appearing in the frame (<i>actor</i>, <i>callee</i>, <i>environment</i>, and so on) are parented by the thread actor.
+
+=== Global Code Frames ===
+
+A frame for global code has the form:
+
+  { "actor":<i>actor</i>, "depth":<i>depth</i>, "type":"global", "this":<i>this</i>,
+    "where":<i>location</i>, "environment":<i>environment</i> }
+
+where:
+    
+* <i>location</i> is the source location of the current point of execution in the global code (see [[#Source_Locations|Source Locations]]);
+* <i>environment</i> is a value representing the lexical environment of the current point of execution (see [[#Lexical_Environments|Lexical Environments]]);
+
+and other properties are as above.
+
+=== Function Call Frames ===
+
+A frame for an ordinary JavaScript function call has the form:
+
+  { "actor":<i>actor</i>, "depth":<i>depth</i>, "type":"call", "this":<i>this</i>, 
+    "where":<i>location</i>, "environment":<i>environment</i>,
+    "callee":<i>callee</i>, "calleeName":<i>calleeName</i>, "arguments":<i>arguments</i> }
+
+where:
+
+* <i>callee</i> is a grip on the function value being called;
+* <i>calleeName</i> is the name of the callee, a string (this property is omitted for anonymous functions);
+* <i>arguments</i> is an array of grips on the actual values passed to the function;
+
+and other properties are as above.
+
+For calls to host functions, the <tt>"where"</tt> and <tt>"environment"</tt> properties may be absent.
+
+The argument list may be incomplete or inaccurate, for various reasons. If the program has assigned to its formal parameters, the original values passed may have been lost, and compiler optimizations may drop some argument values.
+
+=== Eval Frames ===
+
+A frame for a call to <tt>eval</tt> has the form:
+
+  { "actor":<i>actor</i>, "depth":<i>depth</i>, "type":"eval", "this":<i>this</i>,
+    "where":<i>location</i>, "environment":<i>environment</i> }
+
+where the properties are as defined above.
+
+=== Client Evaluation Frames ===
+
+When the client evaluates an expression with an <tt>clientEvaluate</tt> packet, the evaluation appears on the stack as a special kind of frame, of the form:
+
+  { "actor":<i>actor</i>, "depth":<i>depth</i>, "type":"clientEvaluate", "this":<i>this</i>,
+    "where":<i>location</i>, "environment":<i>environment</i> }
+
+where the properties are as defined above. In this case, <i>where</i> will be a location inside the expression provided by the debugger.
+
+== Popping Stack Frames ==
+
+The client can remove frames from the stack by sending a request of the form:
+
+  { "to":<i>frameActor</i>, "type":"pop", "value":<i>value</i> }
+
+where <i>frameActor</i> is the actor representing the stack frame to pop, and <i>value</i> is a grip on the value that should be returned as the value of the frame. All younger stack frames are also popped. The frame actor will reply:
+
+  { "from":<i>frameActor</i>, "watches":[<i>watchActor</i> ...] }
+
+where each <i>watchActor</i> is the name of a frame pop watch actor that has been triggered in the process of popping the given frame. If no frame pop watches are triggered, the <tt>watches</tt> property may be omitted.
+
+<i>TODO: specify the error to return if the frame cannot be popped --- can host (C++) function frames be popped?</i>
+
+== Evaluating Source-Language Expressions ==
+
+To evaluate a source-language expression in a thread, the client sends a specialized <tt>resume</tt> packet of the form:
+
+  { "to":<i>thread</i>, "type":"clientEvaluate", "expression":<i>expr</i>, "frame":<i>frame</i> }
+
+This resumes the thread just as an ordinary <tt>resume</tt> packet does, but rather than continuing execution where the pause took place, has the thread begin evaluation of the source-language expression given by <i>expr</i>, a string. The evaluation takes place in a new [[#Client_Evaluation_Frames|Client Evaluation Frame]], pushed on the stack. When evaluation of <i>expr</i> completes, the client will report a <tt>clientEvaluate</tt> pause containing the expression's value.
+
+If evaluating <i>expr</i> completes abruptly, this outcome is still reported via an <tt>clientEvaluated</tt> pause, so it is not necessary for the client to take explicit steps to catch exceptions thrown by the expression.
+
+<i>TODO: evaluate with given grips bound to given identifiers</i>
+
+= Lexical Environments =
+
+A lexical environment (written as <i>environment</i> in packet descriptions) records the identifier bindings visible at a particular point in the program. An environment has one of the following forms:
+
+  { "type":"object", "actor":<i>actor</i>, "object":<i>object</i>, "parent":<i>parentEnvironment</i> }
+
+This represents a scope chain element whose identifier bindings reflect the properties of <i>object</i> (a grip). This could be the global object (<tt>window</tt> in a browser), or a DOM element (for event handler content attributes, which have the input element, form, and document on their scope chain along with the <tt>window</tt>).
+
+<i>Actor</i> is the name of an actor representing this lexical environment. The requests it can answer are described below.
+
+<i>ParentEnvironment</i> describes the next enclosing lexical environment; the <tt>parent</tt> property is omitted on the outermost environment.
+
+  { "type":"function", "actor":<i>actor</i>, "function":<i>function</i>, "functionName":<i>functionName</i>,
+    "bindings":<i>bindings</i>, "parent":<i>parentEnvironment</i> }
+
+This represents the variable environment created by a call to <i>function</i> (a grip), whose name is <i>functionName</i> (a string). <i>Bindings</i> describes the bindings in scope, including the function's arguments, the <tt>arguments</tt> object, and local <tt>var</tt> and function bindings; its form is described in detail below. The <tt>functionName</tt> property is omitted if the function is anonymous. The other properties are as described above.
+
+  { "type":"with", "actor":<i>actor</i>, "object":<i>object</i>, "parent":<i>parentEnvironment</i> }
+
+This represents bindings introduced by a <tt>with</tt> statement whose operand is <i>object</i> (a grip). The other properties are as described above.
+
+  { "type":"block", "actor":<i>actor</i>, "bindings":<i>bindings</i>, "parent":<i>parentEnvironment</i> }
+
+This represents bindings introduced by a <tt>let</tt> block, <tt>for-in</tt> statement, <tt>catch</tt> block, or the like. The properties are as described above.
+
+A <i>bindings</i> value has the form:
+
+  { "mutable":{ <i>name</i>:<i>value</i>, ... },
+    "immutable":{ <i>name</i>:<i>value</i>, ... } }
+
+where each <i>name</i> is the name of a bound identifier, and each <i>value</i> is a grip on that identifier's value. Mutable bindings appear in the <tt>mutable</tt> object, and immutable bindings appear in the <tt>immutable</tt> object. If either category has no bindings, the property may be omitted entirely.
+
+<i>TODO: Should we segregate function arguments in bindings values, in case clients want to display them separately? They should appear in order...</i>
+
+Note that language implementations may omit some environment records from a function's scope if it can determine that the function would not use them. This means that it may be impossible for a debugger to find all the variables that ought to be in scope.
+
+To fully enumerate the bindings introduced by any lexical environment, the client can send a request of the following form to the environment's actor:
+
+  { "to":<i>envActor</i>, "type":"bindings" }
+
+The actor will reply as follows:
+
+  { "from":<i>envActor</i>, "bindings":<i>bindings</i> }
+
+To change the value of a variable bound in a particular lexical environment, the client can send a request to the environment's actor:
+
+  { "to":<i>envActor</i>, "type":"assign", "name":<i>name</i>, "value":<i>value</i> }
+
+This changes the value of the identifier whose name is <i>name</i> (a string) to that represented by <i>value</i> (a grip). The actor will reply as follows, simply:
+
+  { "from":<i>envActor</i> }
+
+If the named identifier is immutable, the actor will send an error reply of the form:
+
+  { "from":<i>envActor</i>, "error":"immutableBinding", "message":<i>message</i> }
+
+== Lexical Environment Examples ==
+
+For example, if we have the following JavaScript code:
+
+  function f(x) {
+    function g(y) {
+      alert(x + y);
+    }
+  }
+
+we set a breakpoint on the line containing the call to <tt>alert</tt>, and then evaluate the expression:
+
+  f("argument to f")("argument to g")
+
+then we would hit that breakpoint, eliciting a packet like the following:
+
+  { "from":<i>thread</i>, "type":"paused", "actor":<i>pauseActor</i>,
+    "why":{ "type":"breakpoint", "actors":[<i>breakpointActor</i>] },
+    "frame":{ "actor":<i>frameActor</i>, "depth":1,
+              "type":"call", "where":{ "url":"sample.js", "line":3 },
+              "environment":{ "type":"function", "actor":<i>gFrameActor</i>,
+                              "function":{ "type":"object", "class":"Function", "actor":<i>gActor</i> },
+                              "functionName":"g",
+                              "bindings":{ "mutable":{ "y":"argument to g" } },
+                              "parent":{ "type":"function", "actor":<i>fFrameActor</i>,
+                                         "function":{ "type":"object", "class":"Function", "actor":<i>fActor</i> },
+                                         "functionName":"f",
+                                         "bindings":{ "mutable":{ "x":"argument to f" } },
+                                         "parent":{ "type":"object", "actor":<i>globalCodeActor</i>,
+                                                    "object":{ "type":"object", "class":"Global",
+                                                               "actor":<i>globalObjectActor</i> }
+                                                  }
+                                       }
+                            },
+                         "callee":<i>gActor</i>, "calleeName":"g",
+              "this":{ "type":"object", "class":"Function", "actor":<i>gActor</i> },
+              "arguments":["argument to g"]
+            }
+  }
+
+You can see here the three nested environment forms, starting with the <tt>environment</tt> property of the top stack frame, reported in the pause:
+
+* The first environment form shows the environment record created by the call to <tt>g</tt>, with the string <tt>"argument to g"</tt> passed as the value of <tt>y</tt>. 
+* Because <tt>g</tt> is nested within <tt>f</tt>, each function object generated for <tt>g</tt> captures the environment of a call to the enclosing function <tt>f</tt>.  Thus, the next thing on <tt>g</tt>'s scope chain is an environment form for the call to <tt>f</tt>, where <tt>"argument to f"</tt> was passed as the vale of <tt>x</tt>.
+* Because <tt>f</tt> is a top-level function, the (only) function object for <tt>f</tt> closes over the global object. This is the "type":"object" environment shown as the parent of <tt>f</tt>'s environment record.
+* Because the global object is at the end of the scope chain, its environment form has no <tt>parent</tt> property.
+
+= Breakpoints =
+
+While a thread is paused, a client can set breakpoints in the thread's code by sending requests of the form:
+
+  { "to":<i>thread</i>, "type":"setBreakpoint", "location":<i>location</i> }
+
+where <i>location</i> is a [[#Source_Locations|source location]]. If the thread is able to establish a breakpoint at the given location, it replies:
+
+  { "from":<i>thread</i>, "actor":<i>actor</i>, "actualLocation":<i>actualLocation</i> }
+
+where <i>actor</i> is an actor representing the breakpoint (a child of the thread actor), and <i>actualLocation</i> is the location at which the breakpoint was really set. If <i>location</i> and <i>actualLocation</i> are the same, then the <tt>actualLocation</tt> property can be omitted.
+
+If the thread cannot find the script referred to in <i>location</i>, it sends an error reply of the form:
+
+  { "from":<i>thread</i>, "error":"noScript" }
+
+If <i>location</i> refers to a line and column at which the given script has no program code, and no reasonable alternative location can be chosen (say, by skipping forward), then the thread sends an error reply of the form:
+
+  { "from":<i>thread</i>, "error":"noCodeAtLineColumn" }
+
+To delete a breakpoint, the client can send the breakpoint's actor a message of the form:
+
+  { "to":<i>breakpointActor</i>, "type":"delete" }
+
+to which the breakpoint actor will reply, simply:
+
+  { "from":<i>breakpointActor</i> }
+
+This closes communications with <i>breakpointActor</i>.
+
+= Watchpoints =
+= Frame Pop Watches =
+
+<i>TODO: DOM node inspection, highlighting</i>

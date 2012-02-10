@@ -1,9 +1,13 @@
 = Mozilla JavaScript Debugging Documentation =
 
-This is the specification for Mozilla's <code>Debugger</code> API, for implementing JavaScript debuggers and tools of that sort. Officially, this documentation is on the [[https://wiki.mozilla.org/Debugger|Mozilla wiki]], but we'd much rather use GitHub for revisions than MediaWiki's revision control, so we've checked it in here.
+This repository holds the specifications for:
+<ul>
+<li>Mozilla's [[https://wiki.mozilla.org/Debugger|<code>Debugger</code> API]], for implementing JavaScript debuggers and tools of that sort, and
+<li>Mozilla's [[https://wiki.mozilla.org/Remote_Debugging_Protocol|remote debugging protocol]], for communicating with such debuggers over some sort of byte stream.
+</ul>
 
-We'll soon bring in the remote debugging protocol docs in here as well.
+Officially, this documentation is on the Mozilla wiki&mdash;that's where the links take you&mdash;but we'd much rather use GitHub for revisions than MediaWiki's revision control, so we've checked it in here.
 
 == Branches ==
 
-This repository's master branch tracks the wiki's contents. Revisions in progress, proposals for changes, and anything else that hasn't been placed on the wiki should go on a branch.
+This repository's master branch tracks the wiki's contents. Revisions in progress, proposals for changes, and anything else that hasn't been placed on the wiki should go on a branch. Independent proposals should go on independent branches, I guess.
