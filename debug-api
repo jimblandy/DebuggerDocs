@@ -1,4 +1,4 @@
-<i>This draft is being discussed in [https://bugzilla.mozilla.org/show_bug.cgi?id=636907 bug 636907]. The interface it describes is not stable.</i>
+<i>This draft is being discussed in [https://bugzilla.mozilla.org/show_bug.cgi?id=636907 bug 636907]. The interface it describes is not stable. You can use the [https://github.com/jimblandy/DebuggerDocs GitHub DebuggerDocs repo] to draft and discuss revisions.</i>
 
 The <code>Debugger</code> constructor makes objects with methods for debugging code running in global objects in other compartments. Given a <code>Debugger</code> instance, you can:
 <ul>

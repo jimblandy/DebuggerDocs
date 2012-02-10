@@ -1,4 +1,4 @@
-<i>(Note: this page is a draft design of work not yet completed. It is written in the present tense to be easily promoted to documentation when implemented, and also to simplify the grammar.)</i>
+<i>(Note: this page is a draft design of work not yet completed. It is written in the present tense to be easily promoted to documentation when implemented, and also to simplify the grammar. You can use the [https://github.com/jimblandy/DebuggerDocs GitHub DebuggerDocs repo] to draft and discuss revisions.)</i>
 
 The Mozilla debugging protocol allows a debugger to connect to a browser, discover what sorts of things are present to debug or inspect, select JavaScript threads to watch, and observe and modify their execution. The protocol provides a unified view of JavaScript, DOM nodes, CSS rules, and the other technologies used in client-side web applications. The protocol ought to be sufficiently general to be extended for use with other sorts of clients (profilers, say) and servers (mail readers; random XULrunner applications).
 
