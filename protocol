@@ -738,6 +738,18 @@ This resumes the thread just as an ordinary <tt>resume</tt> packet does, but rat
 
 If evaluating <i>expr</i> completes abruptly, this outcome is still reported via an <tt>clientEvaluated</tt> pause, so it is not necessary for the client to take explicit steps to catch exceptions thrown by the expression.
 
+If <i>frame</i> is not the name of an actor for a frame currently on <i>thread</i>'s stack, the thread actor sends a reply of the form:
+
+ { "from":<i>thread</i>, "error":"unknownFrame", "message":<i>message</i> }
+
+where <i>message</i> provides any details that would be helpful to the debugger developers. In this case, the thread's state is unaffected.
+
+If the client sends a <code>"clientEvaluate"</code> packet to a thread that is not in the <b>Paused</b> state, the actor sends an error reply of the form:
+
+  { "from":<i>thread</i>, "error":"wrongState", "message":<i>message</i> }
+
+where <i>message</i> details which state the thread was in instead (to make debugging debuggers easier). In this case, the thread's state is unaffected.
+
 <i>TODO: evaluate with given grips bound to given identifiers</i>
 
 = Lexical Environments =
