@@ -336,6 +336,22 @@ where each <i>gripActor</i> is the name of a child of <i>thread</i> that should 
 
 Regardless of the lifetime of a grip, the client may only send messages to grip actors while the thread to which they belong is paused; the client's interaction with values cannot take place concurrently with the thread.
 
+= Completion Values =
+
+Some packets describe the way a stack frame's execution completed using a <b>completion value</b>, which takes one of the following forms:
+
+  { "return":<i>grip</i> }
+
+This indicates that the frame completed normally, returning the value given by <i>grip</i>.
+
+  { "throw":<i>grip</i> }
+
+This indicates that the frame threw an exception; <i>grip</i> is the exception value thrown.
+
+  { "terminated":true }
+
+This indicates that the frame's execution was terminated, as by a "slow script" dialog box or running out of memory.
+
 = Source Locations =
 
 Many packets refer to particular locations in source code: breakpoint requests specify where the breakpoint should be set; stack frames show the current point of execution; and so on.
@@ -525,7 +541,11 @@ The thread stopped because it received an "interrupt" packet from the client.
 
   { "type":"resumeLimit" }
 
-The client resumed the thread with a "resume" packet that included a <tt>resumeLimit</tt> property, and the thread paused because the given <i>limit</i> was met.
+The client resumed the thread with a <tt>"resume"</tt> packet that included a <tt>resumeLimit</tt> property, and the thread paused because the given <i>limit</i> was met. Execution remains in the frame the thread was resumed in, and that frame is not about to be popped.
+
+  { "type":"resumeLimit", "frameFinished":<i>completion</i> }
+
+The client resumed the thread with a <tt>"resume"</tt> packet that included a <tt>resumeLimit</tt> property, and the thread paused because the frame is about to be popped. <i>Completion</i> is a [[#Completion_Values|completion value]] describing how the frame's execution ended. The frame being popped is still the top frame on the stack, but subsequent <code>"resume"</code> operations will run in the calling frame.
 
   { "type":"debuggerStatement" }
 
@@ -541,23 +561,23 @@ The thread stopped at the watchpoints represented by the given actors.
 
 <i>TODO: This should provide more details about the watchpoint in the packet, instead of incurring another round-trip before we can display anything helpful.</i>
 
-  { "type":"clientEvaluated", "value":<i>grip</i> }
+  { "type":"clientEvaluated", "frameFinished":<i>completion</i> }
 
-The client's prior <tt>clientEvaluate</tt> command has completed normally; <i>grip</i> is a grip on the expression's value. See [[#Evaluating_Source-Language_Expressions|Evaluating Source-Language Expressions]] for details.
-
-  { "type":"clientEvaluated", "exception":<i>grip</i> }
-
-The client's prior <tt>clientEvaluate</tt> command has completed abruptly; <i>grip</i> is the uncaught exception value. See [[#Evaluating_Source-Language_Expressions|Evaluating Source-Language Expressions]] for details.
+The expression given in the client's prior <tt>clientEvaluate</tt> command has completed execution; <i>completion</i> is a [[#Completion_Values|completion value]] describing how it completed. The frame created for the <tt>clientEvaluate</tt> resumption has been popped from the stack. See [[#Evaluating_Source-Language_Expressions|Evaluating Source-Language Expressions]] for details.
 
 == Resuming a Thread ==
 
 If a thread is in the <b>Paused</b> state, the client can resume it by sending a packet of the following form:
 
-  { "to":<i>thread</i>, "type":"resume", "resumeLimit":<i>limit</i> }
+  { "to":<i>thread</i>, "type":"resume" }
 
 This puts the thread in the <b>Running</b> state. The thread will pause again for breakpoint hits, watchpoint hits, throw watches, frame pop watches, and other standing pause requests.
 
-In addition, if the optional <tt>resumeLimit</tt> property is present, then the thread should also pause when <i>limit</i> is reached. <i>Limit</i> must have one of the following forms:
+To step a thread's execution, the client can send a packet of the form:
+
+  { "to":<i>thread</i>, "type":"resume", "resumeLimit":<i>limit</i> }
+
+<i>Limit</i> must have one of the following forms:
 
   { "type":"next" }
 
@@ -579,17 +599,27 @@ at.
 </ul>
 This is the same as <tt>"next"</tt>, except that it steps into calls.
 
-  { "type":"finish" }
+To resume the thread but have it stop when the current frame is about to be popped, the client can send a packet of the form:
 
-The thread should pause just before the current frame is popped, whether by throwing an exception or returning a value.
+  { "to":<i>thread</i>, "type":"resume", "resumeLimit":{ "type":"finish" } }
+
+Here, the thread should pause just before the current frame is popped, whether by throwing an exception, returning a value, or being terminated.
 
 When a thread pauses because a limit was reached, the "paused" packet's <i>reason</i> will have a type of <tt>"resumeLimit"</tt>.
 
 A resume limit applies only to the current resumption; once the thread pauses, whether because the limit was reached or some other event occurred&mdash;a breakpoint hit, for example&mdash;the resume limit is no longer in effect.
 
-If no <tt>"resumeLimit"</tt> property appears in the "resume" packet, then the thread should run until some standing pause condition is met (a breakpoint is hit; a watchpoint triggers; or the like).
+If no <tt>"resumeLimit"</tt> property appears in the <tt>"resume"</tt> packet, then the thread should run until some standing pause condition is met (a breakpoint is hit; a watchpoint triggers; or the like).
 
-A "resume" packet closes the pause actor the client provided in the "paused" packet that began the pause.
+To force the current frame to end execution immediately, the client can send a packet of the form:
+
+  { "to":<i>thread</i>, "type":"resume", "forceCompletion":<i>completion</i> }
+
+where <i>completion</i> is a [[#Completion_Values|completion value]] indicating whether the frame should return a value, throw an exception, or be terminated.
+
+A <tt>"resume"</tt> packet may not include both a <tt>"resumeLimit"</tt> property and a <tt>"forceCompletion"</tt> property.
+
+A <tt>"resume"</tt> packet closes the pause actor the client provided in the "paused" packet that began the pause.
 
 If the client sends a <code>"resume"</code> packet to a thread that is not in the <b>Paused</b> state, the actor sends an error reply of the form:
 
