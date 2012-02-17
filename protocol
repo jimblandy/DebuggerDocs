@@ -70,6 +70,18 @@ If an actor receives a packet whose type it does not recognize, it sends an erro
 
 where <i>message</i> provides details to help debugger developers understand what went wrong: what kind of actor <i>actor</i> is; the packet received; and so on.
 
+If an actor recieves a packet which is missing needed parameters (say, a <tt>"releaseMany"</tt> packet with no <tt>"actors"</tt> parameter), it sends an error reply of the form:
+
+  { "from":<i>actor</i>, "error":"missingParameter", "message":<i>message</i> }
+
+where <i>message</i> provides details to help debugger developers fix the problem.
+
+If an actor recieves a packet with a parameter whose value is inappropriate for the operation, it sends an error reply of the form:
+
+  { "from":<i>actor</i>, "error":"badParameterType", "message":<i>message</i> }
+
+where <i>message</i> provides details to help debugger developers fix the problem. (Some packets' descriptions specify more specific errors for particular circumstances.)
+
 = Grips =
 
 A grip is a JSON value that refers to a specific JavaScript value in the debuggee. Grips appear anywhere an arbitrary value from the debuggee needs to be conveyed to the client: stack frames, object property lists, lexical environments, <tt>paused</tt> packets, and so on.
