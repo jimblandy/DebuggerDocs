@@ -824,7 +824,7 @@ This represents a scope chain element whose identifier bindings reflect the prop
 
 <i>Actor</i> is the name of an actor representing this lexical environment. The requests it can answer are described below.
 
-<i>ParentEnvironment</i> describes the next enclosing lexical environment; the <tt>parent</tt> property is omitted on the outermost environment.
+<i>ParentEnvironment</i> is a lexical environment describing the next enclosing environment; the <tt>parent</tt> property is omitted on the outermost environment.
 
   { "type":"function", "actor":<i>actor</i>, "function":<i>function</i>, "functionName":<i>functionName</i>,
     "bindings":<i>bindings</i>, "parent":<i>parentEnvironment</i> }
@@ -833,20 +833,20 @@ This represents the variable environment created by a call to <i>function</i> (a
 
   { "type":"with", "actor":<i>actor</i>, "object":<i>object</i>, "parent":<i>parentEnvironment</i> }
 
-This represents bindings introduced by a <tt>with</tt> statement whose operand is <i>object</i> (a grip). The other properties are as described above.
+This represents an environment introduced by a <tt>with</tt> statement whose operand is <i>object</i> (a grip). The other properties are as described above.
 
   { "type":"block", "actor":<i>actor</i>, "bindings":<i>bindings</i>, "parent":<i>parentEnvironment</i> }
 
-This represents bindings introduced by a <tt>let</tt> block, <tt>for-in</tt> statement, <tt>catch</tt> block, or the like. The properties are as described above.
+This represents an environment introduced by a <tt>let</tt> block, <tt>for-in</tt> statement, <tt>catch</tt> block, or the like. The properties are as described above.
 
 A <i>bindings</i> value has the form:
 
-  { "mutable":{ <i>name</i>:<i>value</i>, ... },
-    "immutable":{ <i>name</i>:<i>value</i>, ... } }
+  { "arguments":[ { <i>name</i>:<i>descriptor</i> }, ... ],
+    "variables":{ <i>name</i>:<i>descriptor</i>, ... } }
 
-where each <i>name</i> is the name of a bound identifier, and each <i>value</i> is a grip on that identifier's value. Mutable bindings appear in the <tt>mutable</tt> object, and immutable bindings appear in the <tt>immutable</tt> object. If either category has no bindings, the property may be omitted entirely.
+Each <i>name</i> is the name of a bound identifier, as a string. Each <i>descriptor</i> is a [[#Property_Descriptors|property descriptor]] for the variable, presenting the variable's value as the descriptor's <tt>"value"</tt> property, and the variable's mutability as the descriptor's <tt>"writable"</tt> property. The descriptor's <tt>"configurable"</tt> property reflects whether the environment supports deleting and adding variables. Each descriptor's <tt>"enumerable"</tt> property is <tt>true</tt>.
 
-<i>TODO: Should we segregate function arguments in bindings values, in case clients want to display them separately? They should appear in order...</i>
+The <tt>"arguments"</tt> list appears only in bindings for <tt>"function"</tt> environments. It lists the arguments in the order they appear in the function's definition. (The same name may appear several times in the list, as permitted by JavaScript; the name's last appearance is the one in scope in the function.)
 
 Note that language implementations may omit some environment records from a function's scope if it can determine that the function would not use them. This means that it may be impossible for a debugger to find all the variables that ought to be in scope.
 
@@ -876,6 +876,7 @@ For example, if we have the following JavaScript code:
 
   function f(x) {
     function g(y) {
+      var z = "value of z";
       alert(x + y);
     }
   }
@@ -893,11 +894,15 @@ then we would hit that breakpoint, eliciting a packet like the following:
               "environment":{ "type":"function", "actor":<i>gFrameActor</i>,
                               "function":{ "type":"object", "class":"Function", "actor":<i>gActor</i> },
                               "functionName":"g",
-                              "bindings":{ "mutable":{ "y":"argument to g" } },
+                              "bindings":{ arguments: [ { "y": { "value":"argument to g", "configurable":"false",
+                                                                 "writable":true, "enumerable":true } } ] },
                               "parent":{ "type":"function", "actor":<i>fFrameActor</i>,
                                          "function":{ "type":"object", "class":"Function", "actor":<i>fActor</i> },
                                          "functionName":"f",
-                                         "bindings":{ "mutable":{ "x":"argument to f" } },
+                                         "bindings": { arguments: [ { "x": { "value":"argument to f", "configurable":"false",
+                                                                      "writable":true, "enumerable":true } } ],
+                                                       variables: { "z": { "value":"value of z", "configurable":"false",
+                                                                           "writable":true, "enumerable":true } } },
                                          "parent":{ "type":"object", "actor":<i>globalCodeActor</i>,
                                                     "object":{ "type":"object", "class":"Global",
                                                                "actor":<i>globalObjectActor</i> }
