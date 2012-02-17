@@ -691,6 +691,28 @@ This acknowledges the exit and allows the thread actor name, <i>thread</i>, to b
 
 When a thread is in the <b>Paused</b> state, the debugger can make requests to inspect its stack, lexical environment, and values.
 
+Only those packets explicitly defined to do so can cause the thread to resume execution. JavaScript features like getters, setters, and proxies, which could normally lead inspection operations like enumerating properties and examining their values to run arbitrary JavaScript code, are disabled while the thread is paused. If a given protocol request is not defined to let the thread run, but carrying out the requested operation would normally cause it to do so --- say, fetching the value of a getter property --- the actor sends an error reply of the form:
+
+  { "from":<i>actor</i>, "error":"threadWouldRun", "message":<i>message</i>, "cause":<i>cause</i> }
+
+where <i>message</i> is text that could be displayed to users explaining why the operation could not be carried out. <i>Cause</i> is one of the following strings:
+
+{| frame="box" rules="all" cellpadding="8"
+! <i>cause</i> value
+! meaning
+|-
+| "proxy"
+| Carrying out the operation would cause a proxy handler to run.
+|-
+| "getter"
+| Carrying out the operation would cause an object property getter to run.
+|-
+| "setter"
+| Carrying out the operation would cause an object property setter to run.
+|}
+
+(Taken together, the <tt>"threadWouldRun"</tt> error name and the <i>cause</i> value should allow the debugger to present an appropriately localized error message.
+
 == Listing Stack Frames ==
 
 To inspect the thread's JavaScript stack, the client can send the following request:
