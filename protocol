@@ -284,7 +284,7 @@ Return JavaScript source code for a function equivalent to the one represented b
 
 where <i>code</i> is a string.
 
-If <i>functionGripActor</i>'s referent is not a function, the actor responds to these requests with an error reply of the form:
+If <i>functionGripActor</i>'s referent is not a function, or is a function proxy, the actor responds to these requests with an error reply of the form:
 
   { "from":<i>functionGripActor</i>, "error":"objectNotFunction", message:<i>message</i> }
 
