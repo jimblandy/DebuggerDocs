@@ -346,7 +346,11 @@ The grip actor will reply, simply:
 
   { "from":<i>gripActor</i> }
 
-This closes the grip actor.
+This closes the grip actor. The <tt>"release"</tt> packet may only be sent to thread-lifetime grip actors; if a pause-lifetime grip actor receives a <tt>"release"</tt> packet, it sends an error reply of the form:
+
+  { "from":<i>gripActor</i>, "error":"notReleasable", "message":<i>message</i> }
+
+where <i>message</i> includes whatever further information would be useful to the debugger developers.
 
 The client can release many thread-lifetime grips in a single operation by sending the thread actor a request of the form:
 
