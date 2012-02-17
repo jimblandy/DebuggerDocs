@@ -734,7 +734,7 @@ To evaluate a source-language expression in a thread, the client sends a special
 
   { "to":<i>thread</i>, "type":"clientEvaluate", "expression":<i>expr</i>, "frame":<i>frame</i> }
 
-This resumes the thread just as an ordinary <tt>resume</tt> packet does, but rather than continuing execution where the pause took place, has the thread begin evaluation of the source-language expression given by <i>expr</i>, a string. The evaluation takes place in a new [[#Client_Evaluation_Frames|Client Evaluation Frame]], pushed on the stack. When evaluation of <i>expr</i> completes, the client will report a <tt>clientEvaluate</tt> pause containing the expression's value.
+This resumes the thread just as an ordinary <tt>resume</tt> packet does, but rather than continuing execution where the pause took place, has the thread begin evaluation of the source-language expression given by <i>expr</i>, a string. The evaluation takes place in a new [[#Client_Evaluation_Frames|Client Evaluation Frame]], pushed on top of <i>thread</i>'s current stack, using the environment of <i>frame</i>. <i>Frame</i> is the name of a live frame actor in <i>thread</i>. When evaluation of <i>expr</i> completes, the client will report a <tt>clientEvaluate</tt> pause containing the expression's value.
 
 If evaluating <i>expr</i> completes abruptly, this outcome is still reported via an <tt>clientEvaluated</tt> pause, so it is not necessary for the client to take explicit steps to catch exceptions thrown by the expression.
 
