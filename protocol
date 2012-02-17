@@ -284,6 +284,12 @@ Return JavaScript source code for a function equivalent to the one represented b
 
 where <i>code</i> is a string.
 
+If <i>functionGripActor</i>'s referent is not a function, the actor responds to these requests with an error reply of the form:
+
+  { "from":<i>functionGripActor</i>, "error":"objectNotFunction", message:<i>message</i> }
+
+where <i>message</i> is a string containing any additional information that would be helpful to debugger developers.
+
 == Long Strings ==
 
 The client can find the full contents of a long string by sending a request to the long string grip actor of the form:
