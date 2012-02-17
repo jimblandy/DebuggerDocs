@@ -286,7 +286,11 @@ Return the lexical environment over which the function has closed. The reply has
 
   { "from":<i>functionGripActor</i>, "scope":<i>environment</i> }
 
-where <i>environment</i> is a [[#Lexical_Environments|lexical environment]].
+where <i>environment</i> is a [[#Lexical_Environments|lexical environment]]. Note that the server only returns environments of functions in a context being debugged; if the function's global scope is not the browsing context to which we are attached, the function grip actor sends an error reply of the form:
+
+  { "from":<i>functionGripActor</i>, "error":"notDebuggee", "message":<i>message</i> }
+
+where <i>message</i> is text explaining the problem.
 
   { "to":<i>functionGripActor</i>, "type":"decompile", "pretty":<i>pretty</i> }
 
@@ -740,7 +744,7 @@ where:
 
 and other properties are as above.
 
-For calls to host functions, the <tt>"where"</tt> and <tt>"environment"</tt> properties may be absent.
+If the callee is a host function, or a function scoped to some global other than the one to which we are attached, the <tt>"where"</tt> and <tt>"environment"</tt> properties are absent.
 
 The argument list may be incomplete or inaccurate, for various reasons. If the program has assigned to its formal parameters, the original values passed may have been lost, and compiler optimizations may drop some argument values.
 
@@ -778,11 +782,11 @@ where each <i>watchActor</i> is the name of a frame pop watch actor that has bee
 
 == Evaluating Source-Language Expressions ==
 
-To evaluate a source-language expression in a thread, the client sends a specialized <tt>resume</tt> packet of the form:
+To evaluate a source-language expression in a thread, the client sends a specialized <tt>"resume"</tt> packet of the form:
 
   { "to":<i>thread</i>, "type":"clientEvaluate", "expression":<i>expr</i>, "frame":<i>frame</i> }
 
-This resumes the thread just as an ordinary <tt>resume</tt> packet does, but rather than continuing execution where the pause took place, has the thread begin evaluation of the source-language expression given by <i>expr</i>, a string. The evaluation takes place in a new [[#Client_Evaluation_Frames|Client Evaluation Frame]], pushed on top of <i>thread</i>'s current stack, using the environment of <i>frame</i>. <i>Frame</i> is the name of a live frame actor in <i>thread</i>. When evaluation of <i>expr</i> completes, the client will report a <tt>clientEvaluate</tt> pause containing the expression's value.
+This resumes the thread just as an ordinary <tt>"resume"</tt> packet does, but, rather than continuing execution where the pause took place, has the thread begin evaluation of the source-language expression given by <i>expr</i>, a string. The evaluation takes place in a new [[#Client_Evaluation_Frames|Client Evaluation Frame]], pushed on top of <i>thread</i>'s current stack, using the environment of <i>frame</i>. <i>Frame</i> must be a live actor for one of <i>thread</i>'s frames, and the given frame must be one from which we can retrieve a lexical environment; that is, it must not be the frame for a call to a non-debuggee function. When evaluation of <i>expr</i> completes, the client will report a <tt>clientEvaluate</tt> pause containing the expression's value.
 
 If evaluating <i>expr</i> completes abruptly, this outcome is still reported via an <tt>clientEvaluated</tt> pause, so it is not necessary for the client to take explicit steps to catch exceptions thrown by the expression.
 
@@ -791,6 +795,12 @@ If <i>frame</i> is not the name of an actor for a frame currently on <i>thread</
  { "from":<i>thread</i>, "error":"unknownFrame", "message":<i>message</i> }
 
 where <i>message</i> provides any details that would be helpful to the debugger developers. In this case, the thread's state is unaffected.
+
+If <i>frame</i> is not a frame whose environment we can access, the thread actor sends an error reply of the form:
+
+  { "from":<i>thread</i>, "error":"notDebuggee", "message":<i>message</i> }
+
+where <i>message</i> provides further appropriate details.
 
 If the client sends a <code>"clientEvaluate"</code> packet to a thread that is not in the <b>Paused</b> state, the actor sends an error reply of the form:
 
