@@ -711,7 +711,7 @@ where <i>message</i> is text that could be displayed to users explaining why the
 | Carrying out the operation would cause an object property setter to run.
 |}
 
-(Taken together, the <tt>"threadWouldRun"</tt> error name and the <i>cause</i> value should allow the debugger to present an appropriately localized error message.
+(Taken together, the <tt>"threadWouldRun"</tt> error name and the <i>cause</i> value should allow the debugger to present an appropriately localized error message.)
 
 == Listing Stack Frames ==
 
