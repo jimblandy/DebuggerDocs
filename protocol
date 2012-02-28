@@ -644,7 +644,7 @@ To force the current frame to end execution immediately, the client can send a p
 
   { "to":<i>thread</i>, "type":"resume", "forceCompletion":<i>completion</i> }
 
-where <i>completion</i> is a [[#Completion_Values|completion value]] indicating whether the frame should return a value, throw an exception, or be terminated.
+where <i>completion</i> is a [[#Completion_Values|completion value]] indicating whether the frame should return a value, throw an exception, or be terminated. Execution resumes in the current frame's caller, in the manner appropriate for <i>completion</i>.
 
 A <tt>"resume"</tt> packet may not include both a <tt>"resumeLimit"</tt> property and a <tt>"forceCompletion"</tt> property.
 
@@ -799,9 +799,9 @@ where the properties are as defined above. In this case, <i>where</i> will be a 
 
 The client can remove frames from the stack by sending a request of the form:
 
-  { "to":<i>frameActor</i>, "type":"pop", "value":<i>value</i> }
+  { "to":<i>frameActor</i>, "type":"pop", "completionValue":<i>completion</i> }
 
-where <i>frameActor</i> is the actor representing the stack frame to pop, and <i>value</i> is a grip on the value that should be returned as the value of the frame. All younger stack frames are also popped. The frame actor will reply:
+where <i>frameActor</i> is the actor representing the stack frame to pop, and <i>completion</i> is a [[#Completion_Values|completion value]] describing how the frame should appear to have finished execution. All younger stack frames are also popped. The thread remains paused. The frame actor will reply:
 
   { "from":<i>frameActor</i>, "watches":[<i>watchActor</i> ...] }
 
