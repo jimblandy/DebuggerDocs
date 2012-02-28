@@ -691,7 +691,7 @@ This acknowledges the exit and allows the thread actor name, <i>thread</i>, to b
 
 When a thread is in the <b>Paused</b> state, the debugger can make requests to inspect its stack, lexical environment, and values.
 
-Only those packets explicitly defined to do so can cause the thread to resume execution. JavaScript features like getters, setters, and proxies, which could normally lead inspection operations like enumerating properties and examining their values to run arbitrary JavaScript code, are disabled while the thread is paused. If a given protocol request is not defined to let the thread run, but carrying out the requested operation would normally cause it to do so --- say, fetching the value of a getter property --- the actor sends an error reply of the form:
+Only those packets explicitly defined to do so can cause the thread to resume execution. JavaScript features like getters, setters, and proxies, which could normally lead inspection operations like enumerating properties and examining their values to run arbitrary JavaScript code, are disabled while the thread is paused. If a given protocol request is not defined to let the thread run, but carrying out the requested operation would normally cause it to do so&mdash;say, fetching the value of a getter property&mdash;the actor sends an error reply of the form:
 
   { "from":<i>actor</i>, "error":"threadWouldRun", "message":<i>message</i>, "cause":<i>cause</i> }
 
