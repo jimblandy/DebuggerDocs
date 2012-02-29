@@ -233,10 +233,32 @@ Since <code>Debugger</code> instances don't hold strong references to their debu
 <dt>getNewestFrame()
 <dd>Return a <code>Debugger.Frame</code> instance referring to the youngest [[#Visible_Frames|visible frame]] currently on the calling thread's stack, or <code>null</code> if there are no visible frames on the stack.
 
-<dt>getAllScripts([<i>global</i>])
-<dd>Return an array of <code>Debugger.Script</code> objects, one for each debuggee script. With no argument, return all scripts for all debuggees. With the optional argument <i>global</i>, return all debuggee scripts that could run in that global. If <i>global</i> is present but is not (a cross-compartment wrapper or <code>Debugger.Object</code> for) an object in a debuggee global's scope, throw a TypeError.
+<dt>findScriptURLs([<i>query</i>])
+<dd>Return an array containing the values of the <code>url</code> properties of all debuggee scripts matching <i>query</i>. Each distinct value appears only once in the array. <i>Query</i> is an object whose properties restrict which scripts are returned; a script must meet all the criteria given by <i>query</i> to be returned. If <i>query</i> is omitted, we return the <code>url</code> values of all debuggee scripts.
 
-This returns all existing scripts (in the given <i>global</i>, if any) that would qualify for the <code>onNewScript</code> handler if they were created right now. However, unlike <code>onNewScript</code>, <code>getAllScripts</code> includes not only top-level scripts but also nested function scripts.
+<i>Query</i> may have the following property:
+<dl>
+<dt>global
+<dd>The script must be in the scope of the given global object. If this property's value is a <code>Debugger.Object</code> instance belonging to this <code>Debugger</code> instance, then its referent is used. If the object is not a global object, then the global in whose scope it was allocated is used.
+</dl>
+
+<dt>findScripts([<i>query</i>])
+Return an array of <code>Debugger.Script</code> instances for all debuggee scripts matching <i>query</i>. Each instance appears only once in the array. <i>Query</i> is an object whose properties restrict which scripts are returned; a script must meet all the criteria given by <i>query</i> to be returned. If <i>query</i> is omitted, we return the <code>Debugger.Script</code> instances for all debuggee scripts.
+
+<i>Query</i> may have the following properties:
+<dl>
+<dt>url
+<dd>The script's <code>url</code> property must be equal to this value.
+<dt>line
+<dd>The script must at least partially cover the given source line. If this property is present, the <code>url</code> property must be present as well.
+<dt>column
+<dd>The script must include  given column on the line given by the <code>line</code> property. If this property is present, the <code>url</code> and <code>line</code> properties must both be present as well.
+<dt>innermost
+<dd>If this property is present and true, the script must be the innermost script covering the given source location; scripts of enclosing code are omitted.
+<dt>global
+<dd>The script must be in the scope of the given global object. If this property's value is a <code>Debugger.Object</code> instance belonging to this <code>Debugger</code> instance, then its referent is used. If the object is not a global object, then the global in whose scope it was allocated is used.
+</dl>
+All properties of <i>query</i> are optional. Passing an empty object returns all debuggee code scripts.
 
 <dt>clearBreakpoint(<i>handler</i>)
 <dd>Remove all breakpoints set in this <code>Debugger</code> instance that use <i>handler</i> as their handler. Note that, if breakpoints using other handler objects are set at the same location(s) as <i>handler</i>, they remain in place.
