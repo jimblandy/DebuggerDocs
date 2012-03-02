@@ -94,6 +94,24 @@ If a function that would normally return a resumption value to indicate how the 
 
 Some debugger operations that appear to simply inspect the debuggee's state may actually cause debuggee code to run. For example, reading a variable might run a getter function on the global or on a <code>with</code> expression's operand; and getting an object's property descriptor will run a handler trap if the object is a proxy. To protect the debugger's integrity, only methods whose stated purpose is to run debuggee code can do so. These methods are called [[#Invocation_Functions_and_.22debugger.22_Frames|invocation functions]], and they follow certain common conventions to report the debuggee's behavior safely. For other methods, if their normal operation would cause debuggee code to run, they throw an instance of the <code>Debugger.DebuggeeWouldRun</code> exception.
 
+A <code>Debugger.DebuggeeWouldRun</code> exception may have a <code>cause</code> property, providing more detailed information on why the debuggee would have run. The <code>cause</code> property's value is one of the following strings:
+
+{| frame="box" rules="all" cellpadding="8"
+! <i>cause</i> value
+! meaning
+|-
+| "proxy"
+| Carrying out the operation would have caused a proxy handler to run.
+|-
+| "getter"
+| Carrying out the operation would have caused an object property getter to run.
+|-
+| "setter"
+| Carrying out the operation would have caused an object property setter to run.
+|}
+
+If the system can't determine why control attempted to enter the debuggee, it will leave the exception's <code>cause</code> property undefined.
+
 == The Debugger Object ==
 
 When called as a constructor, the <code>Debugger</code> object creates a new <code>Debugger</code> instance.
