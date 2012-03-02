@@ -242,6 +242,8 @@ Since <code>Debugger</code> instances don't hold strong references to their debu
 <dd>The script must be in the scope of the given global object. If this property's value is a <code>Debugger.Object</code> instance belonging to this <code>Debugger</code> instance, then its referent is used. If the object is not a global object, then the global in whose scope it was allocated is used.
 </dl>
 
+Note that the result may include values for scripts that can no longer ever be used by the debuggee, say, those for eval code that has finished running, or unreachable functions. Whether such script's <code>url</code> values appear can be affected by the garbage collector's behavior, so this function's behavior is not entirely deterministic.
+
 <dt>findScripts([<i>query</i>])
 Return an array of <code>Debugger.Script</code> instances for all debuggee scripts matching <i>query</i>. Each instance appears only once in the array. <i>Query</i> is an object whose properties restrict which scripts are returned; a script must meet all the criteria given by <i>query</i> to be returned. If <i>query</i> is omitted, we return the <code>Debugger.Script</code> instances for all debuggee scripts.
 
@@ -259,6 +261,8 @@ Return an array of <code>Debugger.Script</code> instances for all debuggee scrip
 <dd>The script must be in the scope of the given global object. If this property's value is a <code>Debugger.Object</code> instance belonging to this <code>Debugger</code> instance, then its referent is used. If the object is not a global object, then the global in whose scope it was allocated is used.
 </dl>
 All properties of <i>query</i> are optional. Passing an empty object returns all debuggee code scripts.
+
+Note that the result may include <code>Debugger.Script</code> instances for scripts that can no longer ever be used by the debuggee, say, those for eval code that has finished running, or unreachable functions. Whether such scripts appear can be affected by the garbage collector's behavior, so this function's behavior is not entirely deterministic.
 
 <dt>clearBreakpoint(<i>handler</i>)
 <dd>Remove all breakpoints set in this <code>Debugger</code> instance that use <i>handler</i> as their handler. Note that, if breakpoints using other handler objects are set at the same location(s) as <i>handler</i>, they remain in place.
