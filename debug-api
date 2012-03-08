@@ -263,7 +263,7 @@ Since <code>Debugger</code> instances don't hold strong references to their debu
 Note that the result may include values for scripts that can no longer ever be used by the debuggee, say, those for eval code that has finished running, or unreachable functions. Whether such script's <code>url</code> values appear can be affected by the garbage collector's behavior, so this function's behavior is not entirely deterministic.
 
 <dt>findScripts([<i>query</i>])
-Return an array of <code>Debugger.Script</code> instances for all debuggee scripts matching <i>query</i>. Each instance appears only once in the array. <i>Query</i> is an object whose properties restrict which scripts are returned; a script must meet all the criteria given by <i>query</i> to be returned. If <i>query</i> is omitted, we return the <code>Debugger.Script</code> instances for all debuggee scripts.
+<dd>Return an array of <code>Debugger.Script</code> instances for all debuggee scripts matching <i>query</i>. Each instance appears only once in the array. <i>Query</i> is an object whose properties restrict which scripts are returned; a script must meet all the criteria given by <i>query</i> to be returned. If <i>query</i> is omitted, we return the <code>Debugger.Script</code> instances for all debuggee scripts.
 
 <i>Query</i> may have the following properties:
 <dl>
