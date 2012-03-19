@@ -883,6 +883,8 @@ The actor will reply as follows:
 
   { "from":<i>envActor</i>, "bindings":<i>bindings</i> }
 
+Note that this request elicits a <code>"threadWouldRun"</code> error reply when <i>envActor</i> refers to an object environment whose object is a proxy.
+
 To change the value of a variable bound in a particular lexical environment, the client can send a request to the environment's actor:
 
   { "to":<i>envActor</i>, "type":"assign", "name":<i>name</i>, "value":<i>value</i> }
@@ -894,6 +896,8 @@ This changes the value of the identifier whose name is <i>name</i> (a string) to
 If the named identifier is immutable, the actor will send an error reply of the form:
 
   { "from":<i>envActor</i>, "error":"immutableBinding", "message":<i>message</i> }
+
+If <i>envActor</i> refers to an object environment whose object is a proxy, or whose property named <i>name</i> has a setter function, this request elicits a <code>"threadWouldRun"</code> error reply.
 
 == Lexical Environment Examples ==
 
