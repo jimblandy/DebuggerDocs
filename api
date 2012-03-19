@@ -845,9 +845,9 @@ The methods described below may only be called with a <code>this</code> value re
 This is not an [[#Invocation_Functions_and_.22debugger.22_Frames|invocation function]]; if this call would cause debuggee code to run (say, because the environment is a <code>"with"</code> environment, and <i>name</i> refers to an accessor property of the <code>with</code> statement's operand), this call throws a [[#The_Debugger.DebuggeeWouldRun_Exception|<code>Debugger.DebuggeeWouldRun</code>]] exception.
 
 <dt>setVariable(<i>name</i>, <i>value</i>)
-<dd>Store <i>value</i> as the value of the variable bound to <i>name</i> in this environment, creating the variable if it does not exist. <i>Name</i> must be a string that is a valid ECMAScript identifier name; <i>value</i> must be a debuggee value.
+<dd>Store <i>value</i> as the value of the variable bound to <i>name</i> in this environment. <i>Name</i> must be a string that is a valid ECMAScript identifier name; <i>value</i> must be a debuggee value.
 
-If this call would add a new variable to this environment, but implementation restrictions prevent SpiderMonkey from extending the environment as requested, this call throws an <code>Error</code> exception.
+If this environment binds no variable named <i>name</i>, throw a <code>ReferenceError</code>.
 
 This is not an [[#Invocation_Functions_and_.22debugger.22_Frames|invocation function]]; if this call would cause debuggee code to run, this call throws a [[#The_Debugger.DebuggeeWouldRun_Exception|<code>Debugger.DebuggeeWouldRun</code>]] exception.
 
@@ -857,12 +857,19 @@ This is not an [[#Invocation_Functions_and_.22debugger.22_Frames|invocation func
 If this is an <code>"object"</code> or <code>"with"</code> environment record, this simply returns the descriptor for the given property of the environment's object. If this is a declarative environment record, this returns a descriptor reflecting the binding's mutability as the descriptor's <code>writable</code> property, and its deletability as the descriptor's <code>configurable</code> property. All declarative environment record bindings are marked as <code>enumerable</code>. <i>(This isn't great; the semantics of variables in declarative enviroments don't really match those of properties, so 
 writing code that operates properly on descriptors for either kind may be difficult.)</i>
 
-If there is no variable named <i>name</i> bound in this environment, throw a <code>ReferenceError</code>.
+If this environment binds no variable named <i>name</i>, throw a <code>ReferenceError</code>.
 
 <dt>defineVariable(<i>name</i>, <i>descriptor</i>)
 <dd>Create or reconfigure the variable bound to <i>name</i> in this environment according to <i>descriptor</i>. <i>Descriptor</i> is the sort of value returned by <code>getVariableDescriptor</code>. On success, return <code>undefined</code>; on failure, throw an appropriate exception. <i>Name</i> must be a string whose value is a valid ECMAScript identifier name.
 
 If implementation restrictions prevent SpiderMonkey from creating or reconfiguring the variable as requested, this call throws an <code>Error</code> exception.
+
+<dt>deleteVariable(<i>name</i>)
+<dd>Delete this environment's binding for <i>name</i>.
+
+If this environment binds no variable named <i>name</i>, throw a <code>ReferenceError</code>.
+
+If implementation restrictions prevent SpiderMonkey from deleting the variable as requested, this call throws an <code>Error</code> exception.
 
 <dt>find(<i>name</i>)
 <dd>Return a reference to the innermost environment, starting with this environment, that binds <i>name</i>. If <i>name</i> is not in scope in this environment, return <code>null</code>. <i>Name</i> must be a string whose value is a valid ECMAScript identifier name.
