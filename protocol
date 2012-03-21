@@ -322,7 +322,7 @@ Like object grip actors, long string grip actors must only receive messages from
 
 == Grip Lifetimes ==
 
-Most grips are <b>pause-lifetime</b> grips: they last only while the JavaScript thread is paused, and become invalid as soon as the debugger allows the thread to resume execution. (The actors in pause-lifetime grips are children of an actor that is closed when the thread resumes, or is detached from.) This arrangement allows the protocol to use grips freely in responses without requiring the client to remember and close them all.
+Most grips are <b>pause-lifetime</b> grips: they last only while the JavaScript thread is paused, and become invalid as soon as the client allows the thread to resume execution. (The actors in pause-lifetime grips are children of an actor that is closed when the thread resumes, or is detached from.) This arrangement allows the protocol to use grips freely in responses without requiring the client to remember and close them all.
 
 However, in some cases the client may wish to retain a reference to an object while the debuggee runs. For example, a panel displaying objects selected by the user must update its view of the objects each time the debuggee pauses. To carry this out, the client can promote a pause-lifetime grip to a <b>thread-lifetime</b> grip, which lasts until the thread is detached from or exits. Actors in thread-lifetime grips are children of the thread actor. When the client no longer needs a thread-lifetime grip, it can explicitly release it.
 
@@ -712,6 +712,53 @@ where <i>message</i> is text that could be displayed to users explaining why the
 |}
 
 (Taken together, the <tt>"threadWouldRun"</tt> error name and the <i>cause</i> value should allow the debugger to present an appropriately localized error message.)
+
+== Selecting Global Objects to Debug ==
+
+To obtain a list of the global objects in which this thread could execute, the client can send a request of the form:
+
+  { "to":<i>thread</i>, "type":"allGlobals" }
+
+The thread responds with a reply of the form:
+
+  { "from":<i>thread</i>,
+    "globals": { <i>categoryName</i>:
+                 [ { name:<i>globalName</i>, global:<i>global</i>, isDebuggee:<i>isDebuggee</i> },
+                   ...
+                 ], 
+                 ...
+               }
+  }
+
+In this reply:
+<ul>
+<li>Each <i>categoryName</i> is a string to be displayed to developers naming a particular category of global: XUL windows; content tabs: JavaScript modules; and so on.
+<li>Each <i>globalName</i> is a distinctive name for some global object. The names for content windows might include the window title; the names for JavaScript modules might include the module name; and so on.
+<li>Each <i>global</i> is a pause-lifetime grip on the given global object.
+<li>Each <i>isDebuggee</i> is a boolean value indicating whether the given global is currently a debuggee.
+</ul>
+
+To make a given global a debuggee, the client can send the global's actor a packet of the form:
+
+  { "to":<i>global</i>, "type":"becomeDebuggee" }
+
+The global sends a reply of the form:
+
+  { "from":<i>global</i>, "type":"becomeDebuggee" }
+
+To stop debugging a given global, the client can send a packet of the form:
+
+  { "to":<i>global</i>, "type":"removeAsDebuggee" }
+
+If <i>global</i> is currently a debuggee global, it sends a reply of the form:
+
+  { "from":<i>global</i>, "type":"removeAsDebuggee" }
+
+If it is not, it sends a reply of the form:
+
+  { "from":<i>global</i>, "error":"notDebuggee", "message":<i>message</i> }
+
+where <i>message</i> is something helpful to debugger developers.
 
 == Listing Stack Frames ==
 
