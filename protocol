@@ -738,6 +738,8 @@ In this reply:
 <li>Each <i>isDebuggee</i> is a boolean value indicating whether the given global is currently a debuggee.
 </ul>
 
+Note that each global's entry may have additional properties appropriate to the type of global. Entries for JavaScript modules may have an <code>"exports"</code> property whose value is a list of strings naming the symbols the module exports.
+
 To make a given global a debuggee, the client can send the global's actor a packet of the form:
 
   { "to":<i>global</i>, "type":"becomeDebuggee" }
