@@ -217,9 +217,7 @@ The functions described below may only be called with a <code>this</code> value 
 
 <dl>
 <dt>addDebuggee(<i>global</i>)
-<dd>Add the global object designated by <i>global</i> to the set of global objects this <code>Debugger</code> instance is debugging.
-
-Return this <code>Debugger</code> instance.
+<dd>Add the global object designated by <i>global</i> to the set of global objects this <code>Debugger</code> instance is debugging. Return <code>undefined</code>.
 
 One can use any of the following values to designate the global object to add as a debuggee:
 <ul>
@@ -250,6 +248,8 @@ Since <code>Debugger</code> instances don't hold strong references to their debu
 
 <dt>wrap(<i>object</i>)
 <dd>Return the <code>Debugger.Object</code> instance referring to <i>object</i>, an object or a cross-compartment wrapper referring to an object. The returned <code>Debugger.Object</code> instance belongs to this <code>Debugger</code> instance.
+
+If <i>object</i> is not an object, return it unchanged. With this behavior, <code>wrap</code> can serve to convert a value of any type into the appropriate debuggee value.
 
 Note that <i>object</i> need not be allocated in a debuggee global, nor even a debuggee compartment; it can be any object the debugger wishes to use as a debuggee value. 
 
