@@ -582,15 +582,13 @@ Note that, if breakpoints using other handler objects are set at the same locati
 
 == Debugger.Object ==
 
-A <code>Debugger.Object</code> instance represents an object in the debuggee. Debugger code never accesses debuggee objects directly; instead, it operates on <code>Debugger.Object</code> instances that refer to the debuggee objects.
-
-A <code>Debugger.Object</code> instance has reflection-oriented methods to inspect and modify its referent. The referent's properties do not appear directly as properties of the <code>Debugger.Object</code> instance; the debugger can access them only through methods like <code>Debugger.Object.prototype.getOwnPropertyDescriptor</code> and <code>Debugger.Object.prototype.defineProperty</code>, ensuring that the debugger will not inadvertently invoke the referent's getters and setters.
+A <code>Debugger.Object</code> instance represents an object in the debuggee, providing reflection-oriented methods to inspect and modify its referent. The referent's properties do not appear directly as properties of the <code>Debugger.Object</code> instance; the debugger can access them only through methods like <code>Debugger.Object.prototype.getOwnPropertyDescriptor</code> and <code>Debugger.Object.prototype.defineProperty</code>, ensuring that the debugger will not inadvertently invoke the referent's getters and setters.
 
 SpiderMonkey creates exactly one <code>Debugger.Object</code> instance for each debuggee object it presents to a given <code>Debugger</code> instance: if the debugger encounters the same object through two different routes (perhaps two functions are called on the same object), SpiderMonkey presents the same <code>Debugger.Object</code> instance to the debugger each time. This means that the debugger can use the <code>==</code> operator to recognize when two <code>Debugger.Object</code> instances refer to the same debuggee object, and place its own properties on a <code>Debugger.Object</code> instance to store metadata about particular debuggee objects.
 
 (If more than one <code>Debugger</code> instance is debugging the same code, each <code>Debugger</code> gets a separate <code>Debugger.Object</code> instance for a given object. This allows the code using each <code>Debugger</code> instance to place whatever properties it likes on its own <code>Debugger.Object</code> instances, without worrying about interfering with other debuggers.)
 
-While most <code>Debugger.Object</code> instances are created by SpiderMonkey in the process of exposing debuggee's behavior and state to the debugger, the debugger can use <code>Debugger.Object.prototype.copy</code> and <code>Debugger.Object.prototype.create</code> to create objects in debuggee compartments, allocated as if by particular debuggee globals.
+While most <code>Debugger.Object</code> instances are created by SpiderMonkey in the process of exposing debuggee's behavior and state to the debugger, the debugger can use  <code>Debugger.Object.prototype.makeDebuggeeValue</code> to create <code>Debugger.Object</code> instances for given debuggee objects, or use <code>Debugger.Object.prototype.copy</code> and <code>Debugger.Object.prototype.create</code> to create new objects in debuggee compartments, allocated as if by particular debuggee globals.
 
 <code>Debugger.Object</code> instances protect their referents from the garbage collector; as long as the <code>Debugger.Object</code> instance is live, the referent remains live. This means that garbage collection has no visible effect on <code>Debugger.Object</code> instances.
 
@@ -696,6 +694,13 @@ Note that this returns primitive values unchanged. This means you can use <code>
 
 <dt>create(<i>prototype</i>, [<i>properties</i>])
 <dd>Create a new object in the referent's global (and thus in the referent's compartment), and return a <code>Debugger.Object</code> referring to it. The new object's prototype is <i>prototype</i>, which must be an <code>Debugger.Object</code> instance. The new object's properties are as given by <i>properties</i>, as if <i>properties</i> were passed to <code>Debugger.Object.prototype.defineProperties</code>, with the new <code>Debugger.Object</code> instance as the <code>this</code> value.
+
+<dt>makeDebuggeeValue(<i>value</i>)
+<dd>Return the debuggee value that represents <i>value</i> in the debuggee. If <i>value</i> is a primitive, we return it unchanged; if <i>value</i> is an object, we return the <code>Debugger.Object</code> instance representing that object, wrapped appropriately for use in this <code>Debugger.Object</code>'s referent's compartment.
+
+Note that, if <i>value</i> is an object, it need not be one allocated in a debuggee global, nor even a debuggee compartment; it can be any object the debugger wishes to use as a debuggee value. 
+
+In Firefox, all cross-compartment object references go through wrappers, meaning that code in different compartments may see different views of the same object. For example, code in the same compartment as the object can access it directly, but code in another compartment can only refer to the object through a wrapper, which may restrict the code's access to the object. This API takes care to ensure that <code>Debugger.Object</code> instances present the same view of the object the debuggee itself would see. Given a <code>Debugger.Object</code> instance <i>d</i> and an object <i>o</i>, the call <code><i>d</i>.makeDebuggeeValue(<i>o</i>)</code> returns a <code>Debugger.Object</code> instance that presents <i>o</i> as it would be seen by code in <i>d</i>'s compartment.
 
 <dt>decompile([<i>pretty</i>])
 <dd>If the referent is a function that is debuggee code, return the JavaScript source code for a function definition equivalent to the referent function in its effect and result, as a string. If <i>pretty</i> is present and true, produce indented code with line breaks. If the referent is not a function that is debuggee code, return <code>undefined</code>.
