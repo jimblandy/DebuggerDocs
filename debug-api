@@ -512,7 +512,7 @@ A <code>Debugger.Script</code> instance inherits the following accessor properti
 <dd>The number of lines this script's code occupies, within the file or document named by <code>url</code>.
 
 <dt>staticLevel
-<dd>The number of lexical scope levels enclosing this script's code.
+<dd>The number of function bodies enclosing this script's code.
 
 Global code is at level zero; bodies of functions defined at the top level in global code are at level one; bodies of functions nested within those are at level two; and so on.
 
