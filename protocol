@@ -412,7 +412,7 @@ When the connection to the server is opened, the root actor opens the conversati
 
 The root actor's name is always <code>"root"</code>. <i>appType</i> is a string indicating what sort of program the server represents. There may be more properties present, depending on <i>appType</i>.
 
-<i>traits</i> is an object describing protocol variants this server supports that are not convenient for the client to detect otherwise. The property names present indicate what traits the server has; the properties' values depend on their names. This version of the protocol defines no traits, so <i>traits</i> must be an object with no properties, <tt>{}</tt>.
+<i>traits</i> is an object describing protocol variants this server supports that are not convenient for the client to detect otherwise. The property names present indicate what traits the server has; the properties' values depend on their names. If <i>traits</i> would have no properties, the <code>"traits"</code> property of the packet may be omitted altogether. This version of the protocol defines no traits, so if the <code>"traits"</code> property is present at all, its value must be an object with no properties, <tt>{}</tt>.
 
 For web browsers, the introductory packet should have the following form:
 
