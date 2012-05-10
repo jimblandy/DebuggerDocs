@@ -734,7 +734,7 @@ In this reply:
 <ul>
 <li>Each <i>categoryName</i> is a string to be displayed to developers naming a particular category of global: XUL windows; content tabs: JavaScript modules; and so on.
 <li>Each <i>globalName</i> is a distinctive name for some global object. The names for content windows might include the window title; the names for JavaScript modules might include the module name; and so on.
-<li>Each <i>global</i> is a pause-lifetime grip on the given global object.
+<li>Each <i>global</i> is an actor representing the given global object. This is not a grip on the object; rather, it is a child of the pause actor which understands the messages described below.
 <li>Each <i>isDebuggee</i> is a boolean value indicating whether the given global is currently a debuggee.
 </ul>
 
