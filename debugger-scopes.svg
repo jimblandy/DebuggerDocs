@@ -193,7 +193,7 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="0.86548149"
-     inkscape:cx="435.60383"
+     inkscape:cx="437.91468"
      inkscape:cy="372.04724"
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
@@ -213,7 +213,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -543,19 +543,19 @@
          sodipodi:role="line"
          x="394.29749"
          y="791.74762"
-         id="tspan5043">scope</tspan><tspan
+         id="tspan6231">scope chain;</tspan><tspan
          sodipodi:role="line"
          x="394.29749"
          y="814.24762"
-         id="tspan6231">chain; holds</tspan><tspan
+         id="tspan6237">holds blocks</tspan><tspan
          sodipodi:role="line"
          x="394.29749"
          y="836.74762"
-         id="tspan6237">blocks containing</tspan><tspan
+         id="tspan6243">containing vars</tspan><tspan
          sodipodi:role="line"
          x="394.29749"
          y="859.24762"
-         id="tspan6243">vars that could be</tspan><tspan
+         id="tspan3123">that could be</tspan><tspan
          sodipodi:role="line"
          x="394.29749"
          y="881.74762"
