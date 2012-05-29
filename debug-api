@@ -825,6 +825,10 @@ A <code>Debugger.Environment</code> instance inherits the following accessor pro
 
 <dt>object
 <dd>A <code>Debugger.Object</code> instance referring to the object whose properties this environment reflects. If this is a declarative environment record, this accessor throws a <code>TypeError</code> (since declarative environment records have no such object). Both <code>"object"</code> and <code>"with"</code> environments have <code>object</code> properties that provide the object whose properties they reflect as variable bindings.
+
+<dt>callee
+<dd>A <code>Debugger.Object</code> instance referring to the function whose application created this environment, or <code>null</code> if this environment was not created for a <code>"call"</code> frame.
+
 </dl>
 
 === Function Properties of the Debugger.Environment Prototype Object ===
