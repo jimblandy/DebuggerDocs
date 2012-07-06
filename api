@@ -21,6 +21,7 @@ The <code>Debugger</code> object provides various sorts of objects representing 
 <li><code>Debugger.Frame</code> instances represent debuggee stack frames.
 <li><code>Debugger.Script</code> instances represent the debuggee's code, whether it is a function body, code passed to <code>eval</code>, or a top-level script.
 <li><code>Debugger.Environment</code> instances represent the variable environments in effect at different points in the debuggee's code.
+<li><code>Debugger.Source</code> instances represent bodies of source code, whether appearing directly in markup, referenced by url from markup elements, or passed to <code>eval</code> or similar functions.
 </ul>
 
 A <code>Debugger</code> instance can only debug code running in other compartments. You may not create cycles of debugger/debuggee compartments.
@@ -259,16 +260,18 @@ Since <code>Debugger</code> instances don't hold strong references to their debu
 <dt>getNewestFrame()
 <dd>Return a <code>Debugger.Frame</code> instance referring to the youngest [[#Visible_Frames|visible frame]] currently on the calling thread's stack, or <code>null</code> if there are no visible frames on the stack.
 
-<dt>findScriptURLs([<i>query</i>])
-<dd>Return an array containing the values of the <code>url</code> properties of all debuggee scripts matching <i>query</i>. Each distinct value appears only once in the array. <i>Query</i> is an object whose properties restrict which scripts are returned; a script must meet all the criteria given by <i>query</i> to be returned. If <i>query</i> is omitted, we return the <code>url</code> values of all debuggee scripts.
+<dt>findSources([<i>query</i>])
+<dd>Return an array of all <code>Debugger.Source</code> instances matching <i>query</i>. Each source appears only once in the array. <i>Query</i> is an object whose properties restrict which sources are returned; a source must meet all the criteria given by <i>query</i> to be returned. If <i>query</i> is omitted, we return all sources of all debuggee scripts.
 
 <i>Query</i> may have the following property:
 <dl>
+<dt>url
+<dd>The source's <code>url</code> property must be equal to this value.
 <dt>global
-<dd>The script must be in the scope of the given global object. If this property's value is a <code>Debugger.Object</code> instance belonging to this <code>Debugger</code> instance, then its referent is used. If the object is not a global object, then the global in whose scope it was allocated is used.
+<dd>The source must have been evaluated in the scope of the given global object. If this property's value is a <code>Debugger.Object</code> instance belonging to this <code>Debugger</code> instance, then its referent is used. If the object is not a global object, then the global in whose scope it was allocated is used.
 </dl>
 
-Note that the result may include values for scripts that can no longer ever be used by the debuggee, say, those for eval code that has finished running, or unreachable functions. Whether such script's <code>url</code> values appear can be affected by the garbage collector's behavior, so this function's behavior is not entirely deterministic.
+Note that the result may include sources that can no longer ever be used by the debuggee: say, eval code that has finished running, or source for unreachable functions. Whether such sources appear can be affected by the garbage collector's behavior, so this function's result is not entirely deterministic.
 
 <dt>findScripts([<i>query</i>])
 <dd>Return an array of <code>Debugger.Script</code> instances for all debuggee scripts matching <i>query</i>. Each instance appears only once in the array. <i>Query</i> is an object whose properties restrict which scripts are returned; a script must meet all the criteria given by <i>query</i> to be returned. If <i>query</i> is omitted, we return the <code>Debugger.Script</code> instances for all debuggee scripts.
@@ -277,6 +280,8 @@ Note that the result may include values for scripts that can no longer ever be u
 <dl>
 <dt>url
 <dd>The script's <code>url</code> property must be equal to this value.
+<dt>source
+<dd>The script's <code>source</code> property must be equal to this value.
 <dt>line
 <dd>The script must at least partially cover the given source line. If this property is present, the <code>url</code> property must be present as well.
 <dt>column
@@ -494,7 +499,7 @@ A <code>Debugger.Frame</code> instance referring to a generator-iterator frame h
 
 == Debugger.Script ==
 
-A <code>Debugger.Script</code> instance refers to a sequence of bytecode in the debuggee; it is the JavaScript-level presentation of a JSAPI <code>JSScript</code> object. Each of the following is represented by single JSScript object:
+A <code>Debugger.Script</code> instance refers to a sequence of bytecode in the debuggee; it is the <code>Debugger</code> API's presentation of a JSAPI <code>JSScript</code> object. Each of the following is represented by single JSScript object:
 <ul>
 <li>The body of a function&mdash;that is, all the code in the function that is not contained within some nested function.
 <li>The code passed to a single call to <code>eval</code>, excluding the bodies of any functions that code defines.
@@ -517,13 +522,22 @@ A <code>Debugger.Script</code> instance inherits the following accessor properti
 
 <dl>
 <dt>url
-<dd>The filename or URL from which this script's code was loaded.
+<dd>The filename or URL from which this script's code was loaded. If the <code>source</code> property is non-<code>null</code>, then this is equal to <code>source.url</code>.
 
 <dt>startLine
 <dd>The number of the line at which this script's code starts, within the file or document named by <code>url</code>.
 
 <dt>lineCount
 <dd>The number of lines this script's code occupies, within the file or document named by <code>url</code>.
+
+<dt>source
+<dd>The <code>Debugger.Source</code> instance representing the source code from which this script was produced. This is <code>null</code> if the source code was not retained.
+
+<dt>sourceStart
+<dd>The character within the <code>Debugger.Source</code> instance given by <code>source</code> at which this script's code starts; zero-based. If this is a function's script, this is the index of the start of the <code>function</code> token in the source code.
+
+<dt>sourceLength
+<dd>The length, in characters, of this script's code within the <code>Debugger.Source</code> instance given by <code>source</code>.
 
 <dt>staticLevel
 <dd>The number of function bodies enclosing this script's code.
@@ -944,6 +958,80 @@ If <i>code</i> is not strict mode code, then variable declarations in <i>code</i
 This method allows debugger code to introduce temporary bindings that are visible to the given debuggee code and which refer to debugger-held debuggee values, and do so without mutating any existing debuggee environment.
 
 Note that, like <code>eval</code>, declarations in the <i>code</i> passed to <code>evalWithBindings</code> affect this environment, even as <i>code</i> is evaluated with <i>bindings</i> visible. (In the terms used by the ECMAScript specification, the <code>VariableEnvironment</code> of the execution context for the eval code is the <code>VariableEnvironment</code> this environment represents, and the <i>bindings</i> appear in a new declarative environment, which is the eval code's <code>LexicalEnvironment</code>.) If implementation restrictions prevent SpiderMonkey from extending this environment as requested, this call throws an <code>Error</code> exception.
+</dl>
+
+== Debugger.Source ==
+
+A <code>Debugger.Source</code> instance represents a piece of JavaScript source code: it properties specify the source code itself as a string, and where that source originated. A <code>Debugger.Script</code> instance refers to the <code>Debugger.Source</code> instance for the source code from which it was produced.
+
+If a single piece of source code contains both top-level code and function definitions, or nested functions, then the <code>Debugger.Script</code> instances for those pieces of code all refer to the same <code>Debugger.Source<code> instance. Each script indicates the substring of the overall source to which it corresponds.
+
+A <code>Debugger.Source</code> instance may represent only a portion of a larger source document. For example, an HTML document can contain JavaScript in <code>&lt;script&gt;</code> elements and event handler content attributes. In this case, there may be either a single <code>Debugger.Source</code> instance for the entire HTML document, with each <code>Debugger.Script</code> referring to its substring of the document; or there may be a separate <code>Debugger.Source</code> instance for each <code>&lt;script&gt;</code> element and attribute.
+
+=== Accessor Properties of the Debugger.Source Prototype Object ===
+
+A <code>Debugger.Source</code> instance inherits the following accessor properties from its prototype:
+
+<dl>
+<dt>source
+<dd>The JavaScript source code, as a string. The value satisfies the <code>Program</code>, <code>FunctionDeclaration</code>, or <code>FunctionExpression</code> productions in the ECMAScript standard.
+
+<dt>enclosingStart
+<dd>The position within the enclosing document at which this source's text starts. This is a zero-based character offset. (The length of this script within the enclosing document is <code>source.length</code>.)
+
+<dt>lineCount
+<dd>The number of lines in the source code. If there are characters after the last newline in the source code, those count as a final line; otherwise, <code>lineCount</code> is equal to the number of newlines in the source code.
+
+<dt>url
+<dd>The URL from which this source was loaded, if this source was loaded from a URL. Otherwise, this is <code>undefined</code>. Source may be loaded from a URL in the following ways:
+<ul>
+<li>The URL may appear as the <code>src</code> attribute of a <code>&lt;script&gt;</code> element in markup text.
+<li>The URL may be passed to the <code>Worker</code> web worker constructor, or the web worker <code>importScripts</code> function.
+<li>The URL may be the name of a XPCOM JavaScript module or subscript.
+</ul>
+
+<dt>element
+<dd>The DOM element to which this source code belongs, if any, or <code>undefined</code> if it belongs to no DOM element. Source belongs to a DOM element in the following cases:
+<ul>
+<li>Source belongs to a <code>&lt;script&gt;</code> element if it is the element's text content (that is, it is written out as the body of the <code>&lt;script&gt;</code> element in the markup text), or is the source document referenced by its <code>src</code> attribute.
+<li>Source belongs to a DOM element if it is an event handler content attribute (that is, if it is written out in the markup text as an attribute value).
+<li>Source belongs to a DOM element if it was assigned to one of the element's event handler IDL attributes as a string. (Note that one may assign both strings and functions to DOM elements' event handler IDL attributes. If one assigns a function, that function's script's source does <i>not</i> belong to the DOM element; the function's definition must appear elsewhere.)
+</ul>
+
+<dt>elementProperty
+<dd>If this source belongs to a DOM element because it is an event handler content attribute or an event handler IDL attribute, this is the name of that attribute. Otherwise, this is <code>undefined</code>.
+
+<dt>introductionScript
+<dd>If this source was passed to an <i>introduction call</i>, this is the <code>Debugger.Script</code> instance containing that call. Otherwise, this is <code>undefined</code>. (Taken together with the <code>evaluationOffset</code> property, one can determine the call's source and position within that source of the call.)
+
+An introduction call is a function call (or assignment to a setter property) that introduces new JavaScript code to the system. This is one of the following:
+<ul>
+<li>A call to <code>eval</code>.
+<li>A call to the <code>Function</code> constructor.
+<li>A call to the <code>Worker</code> web worker constructor or the <code>importScripts</code> function, which expect a script URL.
+<li>An assignment to an event handler IDL attribute of a DOM element.
+</ul>
+
+<dt>evaluationOffset
+<dd>If <code>introductionScript</code> is a script, this is the offset within that script of the introduction call.
+</dl>
+
+=== Function Properties of the Debugger.Source Prototype Object ===
+
+<dl>
+<dt>substring(<i>start</i>, [<i>end</i>])
+<dd>Return a substring of this instance's <code>source</code> property, starting at <i>start</i> and extending to, but not including, <i>end</i>. If <i>end</i> is <code>undefined</code>, the substring returned extends to the end of the source.
+
+Both indices are zero-based. If either is <code>NaN</code> or negative, it is replaced with zero. If either is greater than the length of the source, it is replaced with the length of the source. If <i>start</i> is larger than <i>end</i>, they are swapped. (This is meant to be consistent with the way <code>String.prototype.substring</code> interprets its arguments.)
+
+<dt>lineToPosition(<i>line</i>)
+<dd>Return an object of the form <code>{ line:<i>line</i>, start:<i>start</i>, length:<i>length</i> }</code>, where <i>start</i> is the character index within <code>source</code> of the first character of line number <i>line</i>, and <i>length</i> is the length of that line in characters, including the final newline, if any. The first line is numbered one. If <i>line</i> is negative or greater than the number of lines in this <code>Debugger.Source</code> instance, then return <code>null</code>.
+
+<dt>positionToLine(<i>start</i>)
+<dd>Return an object of the form <code>{ line:<i>line</i>, start:<i>start</i>, length:<i>length</i> }</code>, where <i>line</i> is the line number containing the character position <i>start</i>, and <i>length</i> is the length of that line in characters, including the final newline, if any. The first line is numbered one. If <i>start</i> is negative or greater than the length of the source code, then return <code>null</code>.
+
+<dt>findScripts(<i>query</i>)
+Return an array of <code>Debugger.Script</code> instances for all debuggee scripts matching <i>query</i> that are produced from this <code>Debugger.Source</code> instance. Aside from the restriction to scripts produced from this source, <i>query</i> is interpreted as for <code>Debugger.prototype.findScripts</code>.
 </dl>
 
 == Future Work ==
