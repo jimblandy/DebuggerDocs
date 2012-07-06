@@ -978,3 +978,7 @@ This closes communications with <i>breakpointActor</i>.
 = Frame Pop Watches =
 
 <i>TODO: DOM node inspection, highlighting</i>
+
+<!-- Local Variables: -->
+<!-- eval: (visual-line-mode) -->
+<!-- End: -->

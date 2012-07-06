@@ -889,3 +889,7 @@ Note that, like <code>eval</code>, declarations in the <i>code</i> passed to <co
 <li>It may be possible for <code>Debugger.Frame.prototype.environment</code> to return more complete environment chains than <code>Debugger.Object.prototype.environment</code>. This possibility should be documented, along with its effects on environment identity.
 <li>The interface should provide clean, predictable ways to observe the effects of garbage collection. For example, perhaps it should provide an interface like [[http://www.cs.indiana.edu/~dyb/pubs/guardians-abstract.html R. Kent Dybvig's guardians]] for observing when objects and scripts become unreachable.
 </ul>
+
+<!-- Local Variables: -->
+<!-- eval: (visual-line-mode) -->
+<!-- End: -->
