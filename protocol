@@ -130,6 +130,9 @@ For example, the following table shows some JavaScript expressions and the grips
 |- 
 | ({x:1})
 | { "type":"object", "class":"Object", "actor":"24" }
+|-
+| "Arms and the man I sing, who, <i>[much, much more text]</i>"
+| { "type":"longString", "initial":"Arms and the man I sing", "length":606647, "actor":"25" }
 |}
 
 Garbage collection will never free objects visible to the client via the protocol. Thus, actors representing JavaScript objects are effectively garbage collection roots.
@@ -316,15 +319,15 @@ where <i>start</i> and <i>end</i> are integers. This requests the substring star
 
   { "from":<i>gripActor</i>, "substring":<i>string</i> }
 
-where <i>string</i> is the requested portion of the string the actor represents. Values for <i>start</i> less than zero are treated as zero; values greater than the length of the string are treated as the length of the string. Values for <i>end</i> are treated similarly. If <i>end</i> is less than <i>start</i>, the two values are swapped. (This is meant to be the same behavior as JavaScript's <code>String.prototype.substr</code>.)
+where <i>string</i> is the requested portion of the string the actor represents. Values for <i>start</i> less than zero are treated as zero; values greater than the length of the string are treated as the length of the string. Values for <i>end</i> are treated similarly. If <i>end</i> is less than <i>start</i>, the two values are swapped. (This is meant to be the same behavior as JavaScript's <code>String.prototype.substring</code>.)
 
-Like object grip actors, long string grip actors must only receive messages from the client while the thread is in the <b>Paused</b> state.
+As with any other actor, the client may only send messages to a long string grip actor while it is alive: for [[#Grip_Lifetimes|pause-lifetime grips]], until the debuggee is resumed; or for [[#Grip_Lifetimes|thread-lifetime grips]], until the thread is detached from or exits. However, unlike object grip actors, the client may communicate with a long string grip actor at any time the actor is alive, regardless of whether the debuggee is paused. (Since strings are immutable values in JavaScript, the responses from a long string grip actor cannot depend on the actions of the debuggee.)
 
 == Grip Lifetimes ==
 
 Most grips are <b>pause-lifetime</b> grips: they last only while the JavaScript thread is paused, and become invalid as soon as the debugger allows the thread to resume execution. (The actors in pause-lifetime grips are children of an actor that is closed when the thread resumes, or is detached from.) This arrangement allows the protocol to use grips freely in responses without requiring the client to remember and close them all.
 
-However, in some cases the client may wish to retain a reference to an object while the debuggee runs. For example, a panel displaying objects selected by the user must update its view of the objects each time the debuggee pauses. To carry this out, the client can promote a pause-lifetime grip to a <b>thread-lifetime</b> grip, which lasts until the thread is detached from or exits. Actors in thread-lifetime grips are children of the thread actor. When the client no longer needs a thread-lifetime grip, it can explicitly release it.
+However, in some cases the client may wish to retain a reference to an object or long string while the debuggee runs. For example, a panel displaying objects selected by the user must update its view of the objects each time the debuggee pauses. To carry this out, the client can promote a pause-lifetime grip to a <b>thread-lifetime</b> grip, which lasts until the thread is detached from or exits. Actors in thread-lifetime grips are children of the thread actor. When the client no longer needs a thread-lifetime grip, it can explicitly release it.
 
 Both pause-lifetime and thread-lifetime grips are garbage collection roots.
 
@@ -360,7 +363,7 @@ where each <i>gripActor</i> is the name of a child of <i>thread</i> that should 
 
   { "from":<i>thread</i> }
 
-Regardless of the lifetime of a grip, the client may only send messages to grip actors while the thread to which they belong is paused; the client's interaction with values cannot take place concurrently with the thread.
+Regardless of the lifetime of a grip, the client may only send messages to object grip actors while the thread to which they belong is paused; the client's interaction with mutable values cannot take place concurrently with the thread.
 
 = Completion Values =
 
