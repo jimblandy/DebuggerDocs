@@ -310,13 +310,13 @@ where <i>message</i> is a string containing any additional information that woul
 
 The client can find the full contents of a long string by sending a request to the long string grip actor of the form:
 
-  { "to":<i>gripActor</i>, "type":"substring", "start":<i>start</i>, "length":<i>length</i> }
+  { "to":<i>gripActor</i>, "type":"substring", "start":<i>start</i>, "end":<i>end</i> }
 
-where <i>start</i> and <i>length</i> are integers. This requests the substring <i>length</i> characters long, starting at the <i>start</i>'th character. The actor replies as follows:
+where <i>start</i> and <i>end</i> are integers. This requests the substring starting at the <i>start</i>'th character, and ending before the <i>end</i>'th character. The actor replies as follows:
 
   { "from":<i>gripActor</i>, "substring":<i>string</i> }
 
-where <i>string</i> is the requested portion of the string the actor represents.
+where <i>string</i> is the requested portion of the string the actor represents. Values for <i>start</i> less than zero are treated as zero; values greater than the length of the string are treated as the length of the string. Values for <i>end</i> are treated similarly. If <i>end</i> is less than <i>start</i>, the two values are swapped. (This is meant to be the same behavior as JavaScript's <code>String.prototype.substr</code>.)
 
 Like object grip actors, long string grip actors must only receive messages from the client while the thread is in the <b>Paused</b> state.
 
