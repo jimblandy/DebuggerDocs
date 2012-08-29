@@ -129,7 +129,7 @@ A <code>Debugger</code> instance inherits the following accessor properties from
 <dt>enabled
 <dd>A boolean value indicating whether this <code>Debugger</code> instance's handlers, breakpoints, watchpoints, and the like are currently enabled. It is an accessor property with a getter and setter: assigning to it enables or disables this <code>Debugger</code> instance; reading it produces true if the instance is enabled, or false otherwise. This property is initially <code>true</code> in a freshly created <code>Debugger</code> instance.
 
-This property gives debugger code a single point of control for disentangling itself from the debuggee, regardless of what sort of events or handlers or "points" we add to the interface. 
+This property gives debugger code a single point of control for disentangling itself from the debuggee, regardless of what sort of events or handlers or "points" we add to the interface.
 
 <dt>uncaughtExceptionHook
 <dd>Either <code>null</code> or a function that SpiderMonkey calls when a call to a debug event handler, breakpoint handler, watchpoint handler, or similar function throws some exception, <i>debugger-exception</i>. Exceptions thrown in the debugger are not propagated to debuggee code; instead, SpiderMonkey calls this function, passing <i>debugger-exception</i> as its sole argument and the <code>Debugger</code> instance as the <code>this</code> value. This function should return a [[#Resumption_Values|resumption value]], which determines how the debuggee should continue.
@@ -747,7 +747,7 @@ Note that this returns primitive values unchanged. This means you can use <code>
 <dt>makeDebuggeeValue(<i>value</i>)
 <dd>Return the debuggee value that represents <i>value</i> in the debuggee. If <i>value</i> is a primitive, we return it unchanged; if <i>value</i> is an object, we return the <code>Debugger.Object</code> instance representing that object, wrapped appropriately for use in this <code>Debugger.Object</code>'s referent's compartment.
 
-Note that, if <i>value</i> is an object, it need not be one allocated in a debuggee global, nor even a debuggee compartment; it can be any object the debugger wishes to use as a debuggee value. 
+Note that, if <i>value</i> is an object, it need not be one allocated in a debuggee global, nor even a debuggee compartment; it can be any object the debugger wishes to use as a debuggee value.
 
 As [[#Debugger_Object|described above]], each <code>Debugger.Object</code> instance presents its referent as viewed from a particular compartment. Given a <code>Debugger.Object</code> instance <i>d</i> and an object <i>o</i>, the call <code><i>d</i>.makeDebuggeeValue(<i>o</i>)</code> returns a <code>Debugger.Object</code> instance that presents <i>o</i> as it would be seen by code in <i>d</i>'s compartment.
 
@@ -778,7 +778,7 @@ Note that, like <code>evalInGlobal</code>, if the code passed to <code>evalInGlo
 <dd>If the referent is a global object, return the <code>Debugger.Environment</code> instance representing the referent as a variable environment for evaluating code. If the referent is not a global object, throw a <code>TypeError</code>.
 
 <dt>setObjectWatchpoint(<i>handler</i>) <i>(future plan)</i>
-<dd>Set a watchpoint on all the referent's own properties, reporting events by calling <i>handler</i>'s methods. Any previous watchpoint handler on this <code>Debugger.Object</code> instance is replaced. If <i>handler</i> is null, the referent is no longer watched. <i>Handler</i> may have the following methods, called under the given circumstances: 
+<dd>Set a watchpoint on all the referent's own properties, reporting events by calling <i>handler</i>'s methods. Any previous watchpoint handler on this <code>Debugger.Object</code> instance is replaced. If <i>handler</i> is null, the referent is no longer watched. <i>Handler</i> may have the following methods, called under the given circumstances:
 
 <dl>
 <dt>add(<i>frame</i>, <i>name</i>, <i>descriptor</i>)
@@ -838,7 +838,7 @@ SpiderMonkey creates exactly one <code>Debugger.Environment</code> instance for 
 
 <code>Debugger.Environment</code> instances protect their referents from the garbage collector; as long as the <code>Debugger.Environment</code> instance is live, the referent remains live. Garbage collection has no visible effect on <code>Debugger.Environment</code> instances.
 
-=== Accessor Properties of the Debugger.Environment Prototype Object === 
+=== Accessor Properties of the Debugger.Environment Prototype Object ===
 
 A <code>Debugger.Environment</code> instance inherits the following accessor properties from its prototype:
 
@@ -885,8 +885,7 @@ This is not an [[#Invocation_Functions_and_.22debugger.22_Frames|invocation func
 <dt>getVariableDescriptor(<i>name</i>)
 <dd>Return an property descriptor describing the variable bound to <i>name</i> in this environment, of the sort returned by <code>Debugger.Object.prototype.getOwnPropertyDescriptor</code>. <i>Name</i> must be a string whose value is a valid ECMAScript identifier name.
 
-If this is an <code>"object"</code> or <code>"with"</code> environment record, this simply returns the descriptor for the given property of the environment's object. If this is a declarative environment record, this returns a descriptor reflecting the binding's mutability as the descriptor's <code>writable</code> property, and its deletability as the descriptor's <code>configurable</code> property. All declarative environment record bindings are marked as <code>enumerable</code>. <i>(This isn't great; the semantics of variables in declarative enviroments don't really match those of properties, so 
-writing code that operates properly on descriptors for either kind may be difficult.)</i>
+If this is an <code>"object"</code> or <code>"with"</code> environment record, this simply returns the descriptor for the given property of the environment's object. If this is a declarative environment record, this returns a descriptor reflecting the binding's mutability as the descriptor's <code>writable</code> property, and its deletability as the descriptor's <code>configurable</code> property. All declarative environment record bindings are marked as <code>enumerable</code>. <i>(This isn't great; the semantics of variables in declarative enviroments don't really match those of properties, so writing code that operates properly on descriptors for either kind may be difficult.)</i>
 
 If this environment binds no variable named <i>name</i>, throw a <code>ReferenceError</code>.
 

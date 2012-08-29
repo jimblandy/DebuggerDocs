@@ -127,7 +127,7 @@ For example, the following table shows some JavaScript expressions and the grips
 |-
 | (void 0)
 | { "type":"undefined" }
-|- 
+|-
 | ({x:1})
 | { "type":"object", "class":"Object", "actor":"24" }
 |-
@@ -511,7 +511,7 @@ The thread responds in one of three ways:
 
   { "from":<i>thread</i>, "type":"detached" }
 
-This indicates that the client has detached from the thread. The thread is now in the <b>Detached</b> state: it can run freely, and no longer reports events to the client. Communications with <i>thread</i> are closed, and the actor name is available for reuse. If the thread had been in the <b>Paused</b> state, the pause actor is closed (because the pause actor is a child of <i>thread</i>). 
+This indicates that the client has detached from the thread. The thread is now in the <b>Detached</b> state: it can run freely, and no longer reports events to the client. Communications with <i>thread</i> are closed, and the actor name is available for reuse. If the thread had been in the <b>Paused</b> state, the pause actor is closed (because the pause actor is a child of <i>thread</i>).
 
   { "from":<i>thread</i>, "type":"paused", ... }
   { "from":<i>thread</i>, "type":"detached" }
@@ -751,7 +751,7 @@ A frame for global code has the form:
     "where":<i>location</i>, "environment":<i>environment</i> }
 
 where:
-    
+
 * <i>location</i> is the source location of the current point of execution in the global code (see [[#Source_Locations|Source Locations]]);
 * <i>environment</i> is a value representing the lexical environment of the current point of execution (see [[#Lexical_Environments|Lexical Environments]]);
 
@@ -761,7 +761,7 @@ and other properties are as above.
 
 A frame for an ordinary JavaScript function call has the form:
 
-  { "actor":<i>actor</i>, "depth":<i>depth</i>, "type":"call", "this":<i>this</i>, 
+  { "actor":<i>actor</i>, "depth":<i>depth</i>, "type":"call", "this":<i>this</i>,
     "where":<i>location</i>, "environment":<i>environment</i>,
     "callee":<i>callee</i>, "calleeName":<i>calleeName</i>, "arguments":<i>arguments</i> }
 
@@ -946,7 +946,7 @@ then we would hit that breakpoint, eliciting a packet like the following:
 
 You can see here the three nested environment forms, starting with the <tt>environment</tt> property of the top stack frame, reported in the pause:
 
-* The first environment form shows the environment record created by the call to <tt>g</tt>, with the string <tt>"argument to g"</tt> passed as the value of <tt>y</tt>. 
+* The first environment form shows the environment record created by the call to <tt>g</tt>, with the string <tt>"argument to g"</tt> passed as the value of <tt>y</tt>.
 * Because <tt>g</tt> is nested within <tt>f</tt>, each function object generated for <tt>g</tt> captures the environment of a call to the enclosing function <tt>f</tt>.  Thus, the next thing on <tt>g</tt>'s scope chain is an environment form for the call to <tt>f</tt>, where <tt>"argument to f"</tt> was passed as the vale of <tt>x</tt>.
 * Because <tt>f</tt> is a top-level function, the (only) function object for <tt>f</tt> closes over the global object. This is the "type":"object" environment shown as the parent of <tt>f</tt>'s environment record.
 * Because the global object is at the end of the scope chain, its environment form has no <tt>parent</tt> property.
