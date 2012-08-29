@@ -106,6 +106,13 @@ This represents the JavaScript <tt>undefined</tt> value. (<tt>undefined</tt> has
 
 This represents a JavaScript object whose class is <i>className</i>. (Arrays and functions are treated as objects for the sake of forming grips.) <i>Actor</i> can be consulted for the object's contents, as explained below.
 
+If the class is "Function", the grip may have additional properties:
+
+  { "type":"object", "class":"Function", "actor":<i>actor</i>,
+    "name":<i>name</i>, "displayName":<i>displayName</i> }
+
+Here, <i>name</i> is the function's name (as given in the source code, following the <code>function</code> keyword), as a string. If the function is anonymous, the <code>name</code> property is omitted, and <i>displayName</i> is a name the system has inferred for the function (say, <code>"Foo.method"</code>). If the function has a given name, or if the system was unable to infer a suitable name for it, the <code>displayName</code> property is omitted.
+
   { "type":"longString", "initial":<i>initial</i>, "length":<i>length</i>, "actor":<i>actor</i> }
 
 This represents a very long string, where "very long" is defined at the server's discretion. <i>Initial</i> is some initial portion of the string, <i>length</i> is the string's full length, and <i>actor</i> can be consulted for the rest of the string, as explained below.
@@ -277,11 +284,14 @@ If an object's class as given in the grip is <code>"Function"</code>, then the g
 
   { "to":<i>functionGripActor</i>, "type":"nameAndParameters" }
 
-This requests the name of the function represented by <i>functionGripActor</i>, and the names of its parameters. The reply has the form:
+This requests the name of the function represented by <i>functionGripActor</i>, its display name, and the names of its parameters. The reply has the form:
 
-  { "from":<i>functionGripActor</i>, "name":<i>name</i>, "parameters":[ <i>parameter</i>, ... ] }
+  { "from":<i>functionGripActor</i>, "name":<i>name</i>, "displayName":<i>displayName</i>,
+    "parameters":[ <i>parameter</i>, ... ] }
 
-where <i>name</i> is the name of the function, or <code>null</code> if the function is anonymous, and each <i>parameter</i> is the name of a formal parameter to the function as a string. If the function takes destructuring arguments, the <i>parameter</i> is a structure of JSON array and object forms matching the form of the destructuring arguments.
+where <i>name</i> is the function's name; <i>displayName</i> is the function's display name; and each <i>parameter</i> is the name of a formal parameter to the function as a string. If the function takes destructuring arguments, the <i>parameter</i> is a structure of JSON array and object forms matching the form of the destructuring arguments.
+
+The <code>name</code> and <code>displayName</code> properties are the same as those appearing on the object grip. <code>name</code> is present only for named functions; <code>displayName</code> is present only for anonymous functions for which the implementation was able to infer a reasonable name.
 
   { "to":<i>functionGripActor</i>, "type":"scope" }
 
