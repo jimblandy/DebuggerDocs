@@ -545,12 +545,12 @@ Note that a client action can occur simultaneously with a thread action. The pro
 
 If the thread pauses to report an interesting event to the client, it sends a packet of the form:
 
-  { "from":<i>thread</i>, "type":"paused", "actor":<i>pause-actor</i>, "why":<i>reason</i>,
+  { "from":<i>thread</i>, "type":"paused", "actor":<i>pauseActor</i>, "why":<i>reason</i>,
     "currentFrame":<i>frame</i>, "poppedFrames":[<i>poppedFrame</i>...] }
 
 This indicates that the thread has entered the <b>Paused</b> state, and explains where and why.
 
-<i>Pause-actor</i> is a "pause actor", representing this specific pause of the thread; it lives until the thread next leaves the <b>Paused</b> state. The pause actor parents actors referring to values and other entities uncovered during this pause; when the thread resumes, those actors are automatically closed. This relieves the client from the responsibility to explicitly close every actor mentioned during the pause.
+<i>PauseActor</i> is a "pause actor", representing this specific pause of the thread; it lives until the thread next leaves the <b>Paused</b> state. The pause actor parents actors referring to values and other entities uncovered during this pause; when the thread resumes, those actors are automatically closed. This relieves the client from the responsibility to explicitly close every actor mentioned during the pause.
 
 Since actors in value grips are parented by the pause actor, this means that those grips become invalid when the thread resumes, or is detached from; it is not possible to take a grip from one pause and use it in the next. To create a grip that remains valid between pauses, see [[#Grip_Lifetimes|Grip Lifetimes]].
 
@@ -580,11 +580,11 @@ The client resumed the thread with a <tt>"resume"</tt> packet that included a <t
 
 The thread stopped because it executed a JavaScript "debugger" statement.
 
-  { "type":"breakpoint", "actors":[<i>breakpoint-actor</i>...] }
+  { "type":"breakpoint", "actors":[<i>breakpointActor</i>...] }
 
 The thread stopped at the breakpoints represented by the given actors.
 
-  { "type":"watchpoint", "actors":[<i>watchpoint-actor</i>...] }
+  { "type":"watchpoint", "actors":[<i>watchpointActor</i>...] }
 
 The thread stopped at the watchpoints represented by the given actors.
 
