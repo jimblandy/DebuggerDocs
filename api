@@ -968,6 +968,12 @@ If a single piece of source code contains both top-level code and function defin
 
 A <code>Debugger.Source</code> instance may represent only a portion of a larger source document. For example, an HTML document can contain JavaScript in <code>&lt;script&gt;</code> elements and event handler content attributes. In this case, there may be either a single <code>Debugger.Source</code> instance for the entire HTML document, with each <code>Debugger.Script</code> referring to its substring of the document; or there may be a separate <code>Debugger.Source</code> instance for each <code>&lt;script&gt;</code> element and attribute.
 
+If a given piece of source code is presented to the JavaScript implementation more than once, with the same origin metadata, the JavaScript implementation may generate a fresh <code>Debugger.Source</code> instance to represent each presentation, or it may use a single <code>Debugger.Source</code> instance to represent them all.
+
+Each <code>Debugger</code> instance has a separate collection of <code>Debugger.Source</code> instances representing the source code that has been presented to the system.
+
+A debugger may place its own properties on <code>Debugger.Source</code> instances, to store metadata about particular pieces of source code.
+
 === Accessor Properties of the Debugger.Source Prototype Object ===
 
 A <code>Debugger.Source</code> instance inherits the following accessor properties from its prototype:
