@@ -743,7 +743,7 @@ If <i>code</i> is not strict mode code, then variable declarations in <i>code</i
 
 This method allows debugger code to introduce temporary bindings that are visible to the given debuggee code and which refer to debugger-held debuggee values, and do so without mutating any existing debuggee environment.
 
-Note that, like <code>evalInGlobal</code>, declarations in the <i>code</i> passed to <code>evalInGlobalWithBindings</code> affect the referent global object, even as <i>code</i> is evaluated with <i>bindings</i> visible. (In the terms used by the ECMAScript specification, the <code>VariableEnvironment</code> of the execution context for the eval code is the referent, and the <i>bindings</i> appear in a new declarative environment, which is the eval code's <code>LexicalEnvironment</code>.)
+Note that, like <code>evalInGlobal</code>, if the code passed to <code>evalInGlobalWithBindings</code> is not strict mode code, then any declarations it contains affect the referent global object, even as <i>code</i> is evaluated in an environment extended according to <i>bindings</i>. (In the terms used by the ECMAScript specification, the <code>VariableEnvironment</code> of the execution context for non-strict eval code is the referent, and the <i>bindings</i> appear in a new declarative environment, which is the eval code's <code>LexicalEnvironment</code>.)
 
 <dt>asEnvironment()
 <dd>If the referent is a global object, return the <code>Debugger.Environment</code> instance representing the referent as a variable environment for evaluating code. If the referent is not a global object, throw a <code>TypeError</code>.
