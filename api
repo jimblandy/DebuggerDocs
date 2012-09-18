@@ -209,6 +209,17 @@ When an exception's propagation causes control to enter a <code>finally</code> b
 </dl>
 
 This method's return value is ignored.
+
+<dt>onNewGlobalObject(global, metadata)
+<dd>A new global object, <i>global</i>, has been created; <i>metadata</i> is an object carrying metadata provided by the implementation about what sort of global object this is.
+
+This handler method is only available to debuggers running in privileged code ("chrome", in Firefox). Most functions provided by this <code>Debugger</code> API observe activity in only those globals that are reachable by the API's user, thus imposing capability-based restrictions on a <code>Debugger</code>'s reach. However, the <code>onNewGlobalObject</code> method allows the API user to monitor all global object creation that occurs anywhere within the JavaScript system (the "JSRuntime", in SpiderMonkey terms), thereby escaping the capability-based limits. For this reason, <code>onNewGlobalObject</code> is only available to privileged code.
+
+<i>Metadata</i> is an object in this <code>Debugger</code>'s compartment; its properties are established by the <i>metadata</i> argument to the JSAPI <code>JS_NewGlobalObjectWithMetadata</code> function, or by the instances of <code>JS::AutoGlobalMetadata</code> that were live when <code>JS_NewGlobalObject</code> was called. If multiple <code>Debugger</code> instances have <code>onNewGlobalObject</code> handlers, each handler is passed a distinct metadata object (with the same properties).
+
+Metadata objects have a string-valued <code>"type"</code> property, indicating what sort of global is being described. The type strings and their meanings depend on the application: a browser might have <code>"window"</code> and <code>"iframe"</code> types, for example. The metadata object's other properties provide further details, as appropriate for the type; for example, a metadata object for a JavaScript Module might look like this:
+
+  { "type":"jsm", "name":"resource:://gre/modules/XPCOMUtils.jsm" }
 </dl>
 
 === Function Properties of the Debugger Prototype Object ===
