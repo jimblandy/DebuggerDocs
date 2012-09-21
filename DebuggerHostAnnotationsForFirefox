@@ -1,24 +1,16 @@
 Firefox's JavaScript [[Debugger|Debugger API]] allows [[Debugger#Debugger.Object|Debugger.Object]] instances to expose embedding-specific metadata about debuggee objects via their <code>hostAnnotation</code> accessor. This page documents the metadata the Mozilla platform exposes for various classes of host object.
 
 
-== Web Content Window Objects (class "Window") ==
+=== Web Content Window Objects (class "Window") ===
 
-The <code>hostAnnotations</code> property of a <code>Debugger.Object</code> instance referring to the global object of a content window has one of the following forms:
+The <code>hostAnnotations</code> property of a <code>Debugger.Object</code> instance referring to the global object of a window the following forms:
 
-  { "type":"iframe", "element":<i>element</i> }
+  { "type":"document", "element":<i>element</i>, "docShell":<i>docShell</i> }
 
-This indicates that the global is the window object belonging to the <code>iframe</code> DOM element <i>element</i>.
-
-  { "type":"xulBrowser", "element":<i>element</i> }
-
-This indicates that the global is the top window object within a content document&mdash;the global belonging to the root of the iframe tree. <i>element<i> is the <code>xul:browser</code> element to which the global belongs.
-
-  { "type":"xulWindow", "element":<i>element</i> }
-
-This indicates that the global belongs to a top-level XUL window; <i>element</i> is the  <code>xul:window</code> element for the window.
+This indicates that the global is the window object belonging to the DOM element <i>element</i>, and the docshell object <i>docShell</i>.
 
 
-== JavaScript Modules' Global Objects (class "Object") ==
+=== JavaScript Modules' Global Objects (class "Object") ===
 
 The <code>hostAnnotations</code> property of a <code>Debugger.Object</code> instance referring to the global object of a JavaScript module has the following form:
 
