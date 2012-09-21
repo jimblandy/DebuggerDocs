@@ -210,16 +210,12 @@ When an exception's propagation causes control to enter a <code>finally</code> b
 
 This method's return value is ignored.
 
-<dt>onNewGlobalObject(global, metadata)
-<dd>A new global object, <i>global</i>, has been created; <i>metadata</i> is an object carrying metadata provided by the implementation about what sort of global object this is.
+<dt>onNewGlobalObject(global)
+<dd>A new global object, <i>global</i>, has been created. The application embedding the JavaScript implementation may provide details about what kind of global it is via <code><i>global</i>.hostAnnotations</code>.
+
+This handler method's return value is ignored.
 
 This handler method is only available to debuggers running in privileged code ("chrome", in Firefox). Most functions provided by this <code>Debugger</code> API observe activity in only those globals that are reachable by the API's user, thus imposing capability-based restrictions on a <code>Debugger</code>'s reach. However, the <code>onNewGlobalObject</code> method allows the API user to monitor all global object creation that occurs anywhere within the JavaScript system (the "JSRuntime", in SpiderMonkey terms), thereby escaping the capability-based limits. For this reason, <code>onNewGlobalObject</code> is only available to privileged code.
-
-<i>Metadata</i> is an object in this <code>Debugger</code>'s compartment; its properties are established by the <i>metadata</i> argument to the JSAPI <code>JS_NewGlobalObjectWithMetadata</code> function, or by the instances of <code>JS::AutoGlobalMetadata</code> that were live when <code>JS_NewGlobalObject</code> was called. If multiple <code>Debugger</code> instances have <code>onNewGlobalObject</code> handlers, each handler is passed a distinct metadata object (with the same properties).
-
-Metadata objects have a string-valued <code>"type"</code> property, indicating what sort of global is being described. The type strings and their meanings depend on the application: a browser might have <code>"window"</code> and <code>"iframe"</code> types, for example. The metadata object's other properties provide further details, as appropriate for the type; for example, a metadata object for a JavaScript Module might look like this:
-
-  { "type":"jsm", "name":"resource:://gre/modules/XPCOMUtils.jsm" }
 </dl>
 
 === Function Properties of the Debugger Prototype Object ===
@@ -302,6 +298,12 @@ Note that the result may include <code>Debugger.Script</code> instances for scri
 <dt>clearAllWatchpoints() <i>(future plan)</i>
 <dd>Clear all watchpoints owned by this <code>Debugger</code> instance.
 
+<dt>findAllGlobals()
+<dd>Return an array of <code>Debugger.Object</code> instances referring to all the global objects present in this JavaScript instance. The application may provide details about what kind of globals they are via the <code>Debugger.Object</code> instances' <code>hostAnnotations</code> accessors.
+
+The results of this call can be affected in non-deterministic ways by the details of the JavaScript implementation. The array may include <code>Debugger.Object</code> instances referring to global objects that are not actually reachable by the debuggee or any other code in the system. (Naturally, once the function has returned, the array's <code>Debugger.Object</code> instances strongly reference the globals they refer to.)
+
+This handler method is only available to debuggers running in privileged code ("chrome", in Firefox). Most functions provided by this <code>Debugger</code> API observe activity in only those globals that are reachable by the API's user, thus imposing capability-based restrictions on a <code>Debugger</code>'s reach. However, <code>findAllGlobals</code> allows the API user to find all global objects anywhere within the JavaScript system (the "JSRuntime", in SpiderMonkey terms), thereby escaping the capability-based limits. For this reason, <code>findAllGlobals</code> is only available to privileged code.
 </dl>
 
 == Debugger.Frame ==
@@ -672,6 +674,16 @@ then this <code>Debugger.Object</code> instance's <code>parameterNames</code> pr
 <dt>proxyConstructTrap
 <dd>If the referent is a function proxy whose handler object was allocated by debuggee code, its construction trap function&mdash;the function called when the function proxy is called via a <code>new</code> expression. If the referent is not a function proxy whose handler object was allocated by debuggee code, this is <code>null</code>.
 
+<dt>hostAnnotations
+<dd>A JavaScript object providing further metadata about the referent, or <code>undefined</code> if none is available. The metadata object is in the same compartment as this <code>Debugger.Object</code> instance. The same metadata object is returned each time for a given <code>Debugger.Object</code> instance.
+
+A typical JavaScript embedding provides "host objects" to expose application-specific functionality to scripts. The <code>hostAnnotations</code> accessor consults the embedding for additional information about the referent that might be of interest to the debugger. The returned object's properties' meanings are up to the embedding. For example, a web browser might provide host annotations for global objects to distinguish top-level windows, iframes, and internal JavaScript scopes.
+
+By convention, host annotation objects have a string-valued <code>"type"</code> property that, taken together with the object's class, indicate what sort of thing the referent is. The host annotation object's other properties provide further details, as appropriate for the type. For example, in Firefox, a metadata object for a JavaScript Module's global object might look like this:
+
+  { "type":"jsm", "uri":"resource:://gre/modules/XPCOMUtils.jsm" }
+
+Firefox provides [DebuggerHostAnnotationsForFirefox annotations] for its host objects.
 </dl>
 
 === Function Properties of the Debugger.Object prototype ===
