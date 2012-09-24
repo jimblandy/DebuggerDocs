@@ -213,7 +213,7 @@ This method's return value is ignored.
 <dt>onNewGlobalObject(global)
 <dd>A new global object, <i>global</i>, has been created. The application embedding the JavaScript implementation may provide details about what kind of global it is via <code><i>global</i>.hostAnnotations</code>.
 
-This handler method's return value is ignored.
+This handler method should return a [[#Resumption_Values|resumption value]] specifying how the debuggee's execution should proceed. However, note that a <code>{ return: <i>value</i> }</code> resumption value is treated like <code>undefined</code> ("continue normally"); <i>value</i> is ignored. (Allowing the handler to substitute its own value for the new global object doesn't seem useful.)
 
 This handler method is only available to debuggers running in privileged code ("chrome", in Firefox). Most functions provided by this <code>Debugger</code> API observe activity in only those globals that are reachable by the API's user, thus imposing capability-based restrictions on a <code>Debugger</code>'s reach. However, the <code>onNewGlobalObject</code> method allows the API user to monitor all global object creation that occurs anywhere within the JavaScript system (the "JSRuntime", in SpiderMonkey terms), thereby escaping the capability-based limits. For this reason, <code>onNewGlobalObject</code> is only available to privileged code.
 </dl>
