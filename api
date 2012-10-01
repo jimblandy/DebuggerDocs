@@ -675,7 +675,7 @@ then this <code>Debugger.Object</code> instance's <code>parameterNames</code> pr
 <dd>If the referent is a function proxy whose handler object was allocated by debuggee code, its construction trap function&mdash;the function called when the function proxy is called via a <code>new</code> expression. If the referent is not a function proxy whose handler object was allocated by debuggee code, this is <code>null</code>.
 
 <dt>hostAnnotations
-<dd>A JavaScript object providing further metadata about the referent, or <code>undefined</code> if none is available. The metadata object is in the same compartment as this <code>Debugger.Object</code> instance. The same metadata object is returned each time for a given <code>Debugger.Object</code> instance.
+<dd>A JavaScript object providing further metadata about the referent, or <code>null</code> if none is available. The metadata object is in the same compartment as this <code>Debugger.Object</code> instance. The same metadata object is returned each time for a given <code>Debugger.Object</code> instance.
 
 A typical JavaScript embedding provides "host objects" to expose application-specific functionality to scripts. The <code>hostAnnotations</code> accessor consults the embedding for additional information about the referent that might be of interest to the debugger. The returned object's properties' meanings are up to the embedding. For example, a web browser might provide host annotations for global objects to distinguish top-level windows, iframes, and internal JavaScript scopes.
 
