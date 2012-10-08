@@ -661,6 +661,11 @@ then this <code>Debugger.Object</code> instance's <code>parameterNames</code> pr
 <dt>proxyConstructTrap
 <dd>If the referent is a function proxy whose handler object was allocated by debuggee code, its construction trap function&mdash;the function called when the function proxy is called via a <code>new</code> expression. If the referent is not a function proxy whose handler object was allocated by debuggee code, this is <code>null</code>.
 
+<dt>global
+<dd>A <code>Debugger.Object</code> instance referring to the global object
+in whose scope the referent was allocated. This does not unwrap
+cross-compartment wrappers: if the referent is a wrapper, the result refers
+to the wrapper's global, not the wrapped object's global.
 </dl>
 
 === Function Properties of the Debugger.Object prototype ===
@@ -793,6 +798,12 @@ The new watchpoint belongs to the <code>Debugger</code> instance to which this <
 <dt>clearPropertyWatchpoint(<i>name</i>) <i>(future plan)</i>
 <dd>Remove any watchpoint set on the referent's property named <i>name</i>.
 
+<dt>unwrap()
+<dd>If the referent is a wrapper, return a <code>Debugger.Object</code>
+instance referring to the wrapped object, if this
+<code>Debugger.Object</code>'s compartment is permitted to access it. If it
+is not permitted to unwrap it, return <code>null</code>. If the referent is
+not a wrapper, return this <code>Debugger.Object</code> instance unchanged.
 </dl>
 
 == Debugger.Environment ==
