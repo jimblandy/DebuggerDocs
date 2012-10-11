@@ -337,9 +337,9 @@ To promote a pause-lifetime grip to a thread-lifetime grip, the client sends a p
 
 where <i>gripActor</i> is the actor from the existing pause-lifetime grip. The grip actor will reply:
 
-  { "from":<i>gripActor</i>, "threadGrip":<i>threadGrip</i> }
+  { "from":<i>gripActor</i> }
 
-where <i>threadGrip</i> is a new grip on the same object, but whose actor is parented by the thread actor, not the pause actor.
+indicating that the given actor is now parented by the thread actor, not the pause actor. The actor's name does not change.
 
 The client can release a thread-lifetime grip by sending the grip actor a request of the form:
 
@@ -362,6 +362,8 @@ The client can release many thread-lifetime grips in a single operation by sendi
 where each <i>gripActor</i> is the name of a child of <i>thread</i> that should be freed. The thread actor will reply, simply:
 
   { "from":<i>thread</i> }
+
+If any of the actors in the <code>"actors"</code> array are pause-lifetime grip actors, the thread actor sends a <code>"notReleasable"</code> error reply, as above, and the pause-lifetime grip actors remain alive; however, all thread-lifetime grip actors in the array are released.
 
 Regardless of the lifetime of a grip, the client may only send messages to object grip actors while the thread to which they belong is paused; the client's interaction with mutable values cannot take place concurrently with the thread.
 
