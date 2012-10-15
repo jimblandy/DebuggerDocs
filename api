@@ -223,16 +223,16 @@ The value <i>global</i> may be any of the following:
 <ul>
 <li>A global object.
 <li>An HTML5 <code>WindowProxy</code> object (an "outer window", in Firefox terminology), which is treated as if the <code>Window</code> object of the browsing context's active document (the "inner window") were passed.
-<li>A cross-compartment wrapper of an object, treated as if the wrapped object were passed.
-<li>A <code>Debugger.Object</code> instance belonging to this <code>Debugger</code> instance, treated as if its referent were passed.
+<li>A cross-compartment wrapper of an object; we apply the prior rules to the wrapped object.
+<li>A <code>Debugger.Object</code> instance belonging to this <code>Debugger</code> instance; we apply the prior rules to the referent.
 </ul>
-Any other sort of value is treated as a <code>TypeError</code>.
+Any other sort of value is treated as a <code>TypeError</code>. (Note that each rule is only applied once in the process of resolving a given <i>global</i> argument. Thus, for example, a <code>Debugger.Object</code> referring to a second <code>Debugger.Object</code> which refers to a global does not designate that global for the purposes of this function.)
 
 The global designated by <i>global</i> must be in a different compartment than this <code>Debugger</code> instance itself. If adding the designated global's compartment would create a cycle of debugger and debuggee compartments, this method throws an error.
 
-This method returns the <code>Debugger.Object</code> instance whose referent is the final global object arrived at after all the dereferencing steps above have been carried out.
+This method returns the <code>Debugger.Object</code> instance whose referent is the designated global object.
 
-The <code>Debugger</code> instance does not hold a strong reference to its debuggee globals: if a debuggee global is not otherwise reachable, then it is dropped from the <code>Debugger</code>'s set of debuggees.
+The <code>Debugger</code> instance does not hold a strong reference to its debuggee globals: if a debuggee global is not otherwise reachable, then it is dropped from the <code>Debugger</code>'s set of debuggees. (Naturally, the <code>Debugger.Object</code> instance this method returns does hold a strong reference to the added global.)
 
 <dt>removeDebuggee(<i>global</i>)
 <dd>Remove the global object designated by <i>global</i> from this <code>Debugger</code> instance's set of debuggees. Return <code>undefined</code>.
