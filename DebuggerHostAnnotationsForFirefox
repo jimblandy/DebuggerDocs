@@ -1,0 +1,24 @@
+Firefox's JavaScript [[Debugger|Debugger API]] allows [[Debugger#Debugger.Object|Debugger.Object]] instances to expose embedding-specific metadata about debuggee objects via their <code>hostAnnotation</code> accessor. This page documents the metadata the Mozilla platform exposes for various classes of host object.
+
+
+=== Web Content Window Objects (class "Window") ===
+
+The <code>hostAnnotations</code> property of a <code>Debugger.Object</code> instance referring to the global object of a window the following forms:
+
+  { "type":"document", "element":<i>element</i>, "docShell":<i>docShell</i> }
+
+This indicates that the global is the window object belonging to the DOM element <i>element</i>, and the docshell object <i>docShell</i>.
+
+
+=== JavaScript Modules' Global Objects (class "Object") ===
+
+The <code>hostAnnotations</code> property of a <code>Debugger.Object</code> instance referring to the global object of a JavaScript module has the following form:
+
+  { "type":"jsm", "uri":<i>uri</i> }
+
+where <i>uri</i> is the URI passed to <code>Components.utils.import</code>.
+
+
+<!-- Local Variables: -->
+<!-- eval: (visual-line-mode) -->
+<!-- End: -->
