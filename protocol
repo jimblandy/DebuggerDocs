@@ -14,7 +14,7 @@ Each server has a root actor, with which the client first interacts. The root ac
 
 For example, a debugger might connect to a browser, ask the root actor to list the browser's tabs, and present this list to the developer. If the developer chooses some tabs to debug, then the debugger can send <tt>attach</tt> requests to the actors representing those tabs, to begin debugging.
 
-Actor names are JSON strings. The name of the root actor is <code>"root"</code>.
+Actor names are JSON strings, containing no spaces or colons. The name of the root actor is <code>"root"</code>.
 
 To allow the server to reuse actor names and the resources they require, actors have limited lifetimes. All actors in a server form a tree, whose root is the root actor. Closing communications with an actor automatically closes communications with its descendants. For example, the actors representing a thread's stack frames are children of the actor representing the thread itself, so that when a debugger detaches from a thread, which closes the thread's actor, the frames' actors are automatically closed. This arrangement allows the protocol to mention actors liberally, without making the client responsible for explicitly closing every actor that has ever been mentioned.
 
