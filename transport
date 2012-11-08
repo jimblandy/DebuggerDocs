@@ -50,6 +50,14 @@ The Stream Transport requires the underlying stream to have the following proper
 
 TCP/IP streams and USB streams meet these requirements.
 
+== Implementation Notes ==
+
+=== Zero-copy Bulk Data ===
+
+Mozilla added bulk data packets to the protocol to download profiling data from devices with limited memory more efficiently. Profiling data sets need to be as large as possible, as larger sets can cover a longer period of time or more frequent samples. However, converting a large data set to a JavaScript object, converting the object to a JSON text, and sending the text over the connection entails making several temporary copies of the data, and thus limits the amount that can be collected. We wanted to let small devices transmit profile data while making as few temporary copies as possible. Since it seemed likely that other sorts of tools would need to exchange large binary blocks efficiently, we wanted this capability to be usable by any protocol participant, rather than being tailored to the profiler's specific case.
+
+In our implementation of this Stream Transport, when a participant wishes to transmit a bulk data packet, it provides the data's length in bytes, and a callback function. When data can be sent, the transport passes the callback function the underlying <code>nsIOutputStream</code>, and the callback writes the data directly to the stream. Thus, the transport itself requires no intermediate copies of the data; the packet can be sent as efficiently as the underlying tool can manage. Similarly, when a participant receives a bulk data packet, the transport passes the actor name and the transport's underlying <code>nsIInputStream</code> directly to a callback function registered for the purpose. The callback function can then consume the data directly, and again, the transport itself requires no intermediate copies.
+
 <!-- Local Variables: -->
 <!-- eval: (visual-line-mode) -->
 <!-- End: -->
