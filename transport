@@ -26,8 +26,7 @@ A bulk data packet has the form:
 
 where:
 <ul>
-<li><code>bulk</code> is the four ASCII characters 'b', 'u', 'l', and 'k';
-<li>there is exactly one space character (the single byte 0x20) between <code>bulk</code> and <i>actor</i>, and between <i>actor</i> and <i>length</i>;
+<li>The keyword <code>bulk</code> is encoded in ASCII, and the spaces are always exactly one ASCII space.
 <li><i>actor</i> is a sequence of Unicode characters, encoded in UTF-8, containing no spaces or colons;
 <li><i>length</i> is a sequence of decimal ASCII digits; and
 <li><i>data</i> is a sequence of bytes whose length is <i>length</i> interpreted as a number.
@@ -52,11 +51,11 @@ TCP/IP streams and USB streams meet these requirements.
 
 == Implementation Notes ==
 
-=== Zero-copy Bulk Data ===
+=== Constant-Overhead Bulk Data ===
 
-Mozilla added bulk data packets to the protocol to download profiling data from devices with limited memory more efficiently. Profiling data sets need to be as large as possible, as larger sets can cover a longer period of time or more frequent samples. However, converting a large data set to a JavaScript object, converting the object to a JSON text, and sending the text over the connection entails making several temporary copies of the data, and thus limits the amount that can be collected. We wanted to let small devices transmit profile data while making as few temporary copies as possible. Since it seemed likely that other sorts of tools would need to exchange large binary blocks efficiently, we wanted this capability to be usable by any protocol participant, rather than being tailored to the profiler's specific case.
+Mozilla added bulk data packets to the protocol to let devices with limited memory upload performance profiling data more efficiently. Profiling data sets need to be as large as possible, as larger data sets can cover a longer period of time or more frequent samples. However, converting a large data set to a JavaScript object, converting that object to a JSON text, and sending the text over the connection entails making several temporary complete copies of the data; on small devices, this limits how much data the profiler can collect. Avoiding these temporary copies would allow small devices to collect and transmit larger profile data sets. Since it seemed likely that other sorts of tools would need to exchange large binary blocks efficiently as well, we wanted a solution usable by all protocol participants, rather than one tailored to the profiler's specific case.
 
-In our implementation of this Stream Transport, when a participant wishes to transmit a bulk data packet, it provides the data's length in bytes, and a callback function. When data can be sent, the transport passes the callback function the underlying <code>nsIOutputStream</code>, and the callback writes the data directly to the stream. Thus, the transport itself requires no intermediate copies of the data; the packet can be sent as efficiently as the underlying tool can manage. Similarly, when a participant receives a bulk data packet, the transport passes the actor name and the transport's underlying <code>nsIInputStream</code> directly to a callback function registered for the purpose. The callback function can then consume the data directly, and again, the transport itself requires no intermediate copies.
+In our implementation of this Stream Transport, when a participant wishes to transmit a bulk data packet, it provides the actor name, the data's length in bytes, and a callback function. When the underyling stream is ready to send more data, the transport writes the packet's <code>bulk <i>actor</i> <i>length</i>:</code> header, and then passes the underlying <code>nsIOutputStream</code> to the callback, which then writes the packet's <i>data</i> portion directly to the stream. Similarly, when a participant receives a bulk data packet, the transport parses the header, and then passes the actor name and the transport's underlying <code>nsIInputStream</code> to a callback function, which consumes the data directly. Thus, while the callback functions may well use fixed-size buffers to send and receive data, the transport imposes no overhead proportional to the full size of the data.
 
 <!-- Local Variables: -->
 <!-- eval: (visual-line-mode) -->
