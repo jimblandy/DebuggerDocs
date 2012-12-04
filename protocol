@@ -109,9 +109,18 @@ This represents a JavaScript object whose class is <i>className</i>. (Arrays and
 If the class is "Function", the grip may have additional properties:
 
   { "type":"object", "class":"Function", "actor":<i>actor</i>,
-    "name":<i>name</i>, "displayName":<i>displayName</i> }
+    "name":<i>name</i>, "displayName":<i>displayName</i>,
+    "userDisplayName":<i>userDisplayName</i> }
 
-Here, <i>name</i> is the function's name (as given in the source code, following the <code>function</code> keyword), as a string. If the function is anonymous, the <code>name</code> property is omitted, and <i>displayName</i> is a name the system has inferred for the function (say, <code>"Foo.method"</code>). If the function has a given name, or if the system was unable to infer a suitable name for it, the <code>displayName</code> property is omitted.
+These additional properties are:
+<dl>
+<dt><i>name</i>
+<dd>The function's name (as given in the source code, following the <code>function</code> keyword), as a string. If the function is anonymous, the <code>name</code> property is omitted.
+<dt><i>displayName</i>
+<dd>A name the system has inferred for the function (say, <code>"Foo.method"</code>). If the function has a given name (appearing in the grip as the <code>"name"</code> property), or if the system was unable to infer a suitable name for it, the <code>displayName</code> property is omitted.
+<dt><i>userDisplayName</i>
+<dd>If the function object has a <code>"displayName"</code> value property whose value is a string, this is that property's value. (Many JavaScript development tools consult such properties, to give developers a way to provide their own meaningful names for functions.)
+</dl>
 
   { "type":"longString", "initial":<i>initial</i>, "length":<i>length</i>, "actor":<i>actor</i> }
 
@@ -773,12 +782,11 @@ A frame for an ordinary JavaScript function call has the form:
 
   { "actor":<i>actor</i>, "depth":<i>depth</i>, "type":"call", "this":<i>this</i>,
     "where":<i>location</i>, "environment":<i>environment</i>,
-    "callee":<i>callee</i>, "calleeName":<i>calleeName</i>, "arguments":<i>arguments</i> }
+    "callee":<i>callee</i>, "arguments":<i>arguments</i> }
 
 where:
 
 * <i>callee</i> is a grip on the function value being called;
-* <i>calleeName</i> is the name of the callee, a string (this property is omitted for anonymous functions);
 * <i>arguments</i> is an array of grips on the actual values passed to the function;
 
 and other properties are as above.
@@ -861,10 +869,10 @@ This represents a scope chain element whose identifier bindings reflect the prop
 
 <i>ParentEnvironment</i> is a lexical environment describing the next enclosing environment; the <tt>parent</tt> property is omitted on the outermost environment.
 
-  { "type":"function", "actor":<i>actor</i>, "function":<i>function</i>, "functionName":<i>functionName</i>,
+  { "type":"function", "actor":<i>actor</i>, "function":<i>function</i>,
     "bindings":<i>bindings</i>, "parent":<i>parentEnvironment</i> }
 
-This represents the variable environment created by a call to <i>function</i> (a grip), whose name is <i>functionName</i> (a string). <i>Bindings</i> describes the bindings in scope, including the function's arguments, the <tt>arguments</tt> object, and local <tt>var</tt> and function bindings; its form is described in detail below. The <tt>functionName</tt> property is omitted if the function is anonymous. The other properties are as described above.
+This represents the variable environment created by a call to <i>function</i> (a grip). <i>Bindings</i> describes the bindings in scope, including the function's arguments, the <tt>arguments</tt> object, and local <tt>var</tt> and function bindings; its form is described in detail below. The other properties are as described above.
 
   { "type":"with", "actor":<i>actor</i>, "object":<i>object</i>, "parent":<i>parentEnvironment</i> }
 
