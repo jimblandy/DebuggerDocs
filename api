@@ -643,12 +643,12 @@ A <code>Debugger.Object</code> instance inherits the following accessor properti
 <dd><code>true</code> if the referent is a callable object (such as a function or a function proxy); false otherwise.
 
 <dt>name
-<dd>The name of the referent, if it is a named function. If the referent is an anonymous function, or not a function at all, return <code>undefined</code>.
+<dd>The name of the referent, if it is a named function. If the referent is an anonymous function, or not a function at all, this is <code>undefined</code>.
 
 This accessor returns whatever name appeared after the <code>function</code> keyword in the source code, regardless of whether the function is the result of instantiating a function declaration (which binds the function to its name in the enclosing scope) or evaluating a function expression (which binds the function to its name only within the function's body).
 
 <dt>displayName
-<dd>The referent's display name, if the referent is a function with a display name. If the referent is not a function, or if it has no display name, return <code>undefined</code>.
+<dd>The referent's display name, if the referent is a function with a display name. If the referent is not a function, or if it has no display name, this is <code>undefined</code>.
 
 If a function has a given name, its display name is the same as its given name. In this case, the <code>displayName</code> and <code>name</code> properties are equal.
 
