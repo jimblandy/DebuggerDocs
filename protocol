@@ -291,16 +291,13 @@ where <i>get</i> and <i>set</i> are grips on the property's getter and setter fu
 
 If an object's class as given in the grip is <code>"Function"</code>, then the grip's actor responds to the messages given here.
 
-  { "to":<i>functionGripActor</i>, "type":"nameAndParameters" }
+  { "to":<i>functionGripActor</i>, "type":"parameterNames" }
 
-This requests the name of the function represented by <i>functionGripActor</i>, its display name, and the names of its parameters. The reply has the form:
+This requests the names of the parameters of the function represented by <i>functionGripActor</i>. The reply has the form:
 
-  { "from":<i>functionGripActor</i>, "name":<i>name</i>, "displayName":<i>displayName</i>,
-    "parameters":[ <i>parameter</i>, ... ] }
+  { "from":<i>functionGripActor</i>, "parameterNames":[ <i>parameter</i>, ... ] }
 
-where <i>name</i> is the function's name; <i>displayName</i> is the function's display name; and each <i>parameter</i> is the name of a formal parameter to the function as a string. If the function takes destructuring arguments, the <i>parameter</i> is a structure of JSON array and object forms matching the form of the destructuring arguments.
-
-The <code>name</code> and <code>displayName</code> properties are the same as those appearing on the object grip. <code>name</code> is present only for named functions; <code>displayName</code> is present only for anonymous functions for which the implementation was able to infer a reasonable name.
+where each <i>parameter</i> is the name of a formal parameter to the function as a string. If the function takes destructuring arguments, then <i>parameter</i> is a structure of JSON array and object forms matching the form of the destructuring arguments.
 
   { "to":<i>functionGripActor</i>, "type":"scope" }
 
