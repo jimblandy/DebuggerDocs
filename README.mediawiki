@@ -14,4 +14,4 @@ This repository's master branch tracks the wiki's contents. Revisions in progres
 
 == Ben's Birthday ==
 
-Please join me in wishing [[http://www.red-bean.com/happy-birthday-ben/|Ben Collins-Sussman]] a happy 40th birthday!
+Please join me in wishing [[http://www.red-bean.com/happy-birthday-ben/|Ben Collins-Sussman]], a very fine fellow, a happy 40th birthday!
