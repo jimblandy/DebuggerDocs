@@ -11,3 +11,7 @@ Officially, this documentation is on the Mozilla wiki&mdash;that's where the lin
 == Branches ==
 
 This repository's master branch tracks the wiki's contents. Revisions in progress, proposals for changes, and anything else that hasn't been placed on the wiki should go on a branch. Independent proposals should go on independent branches, I guess.
+
+== Ben's Birthday ==
+
+Please join me in wishing [[http://www.red-bean.com/happy-birthday-ben/|Ben Collins-Sussman]] a happy 40th birthday!
