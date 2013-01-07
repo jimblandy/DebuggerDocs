@@ -1,6 +1,8 @@
 <i>(Note: this page is a draft design of work not yet completed. It is written in the present tense to be easily promoted to documentation when implemented, and also to simplify the grammar. You can use the [https://github.com/jimblandy/DebuggerDocs GitHub DebuggerDocs repo] to draft and discuss revisions.)</i>
 
-The Mozilla debugging protocol allows a debugger to connect to a browser, discover what sorts of things are present to debug or inspect, select JavaScript threads to watch, and observe and modify their execution. The protocol provides a unified view of JavaScript, DOM nodes, CSS rules, and the other technologies used in client-side web applications. The protocol ought to be sufficiently general to be extended for use with other sorts of clients (profilers, say) and servers (mail readers; random XULrunner applications).
+The Mozilla debugging protocol allows a debugger to connect to a browser or Firefox OS instance, discover what sorts of things are present to debug or inspect, select JavaScript threads to watch, and observe and modify their execution. The protocol provides a unified view of JavaScript, DOM nodes, CSS rules, and the other technologies used in client-side web applications. The protocol ought to be sufficiently general to be extended for use with other sorts of clients (profilers, say) and servers (mail readers; random XULrunner applications).
+
+On Firefox OS, the debugging protocol server run by the main <code>b2g</code> process can enumerate content processes and proxy connections to their own debugging protocol servers. Thus, a single protocol connection provides access to debugging and diagnostic facilities throughout the system.
 
 All communication between debugger (client) and browser (server) is in the form of JSON objects. This makes the protocol directly readable by humans, capable of graceful evolution, and easy to implement using stock libraries. In particular, it should be easy to create mock implementations for testing and experimentation.
 
@@ -16,7 +18,7 @@ Each server has a root actor, with which the client first interacts. The root ac
 
 For example, a debugger might connect to a browser, ask the root actor to list the browser's tabs, and present this list to the developer. If the developer chooses some tabs to debug, then the debugger can send <tt>attach</tt> requests to the actors representing those tabs, to begin debugging.
 
-Actor names are JSON strings. The name of the root actor is <code>"root"</code>.
+Actor names are JSON strings. The name of the root actor is <code>"root"</code>, on a fresh debugger connection. Root actors may have other names (say, for [[Subprocesses|subprocess root servers]]); however, in this documentation we generally assume the root actor is named <code>"root"</code>.
 
 To allow the server to reuse actor names and the resources they require, actors have limited lifetimes. All actors in a server form a tree, whose root is the root actor. Closing communications with an actor automatically closes communications with its descendants. For example, the actors representing a thread's stack frames are children of the actor representing the thread itself, so that when a debugger detaches from a thread, which closes the thread's actor, the frames' actors are automatically closed. This arrangement allows the protocol to mention actors liberally, without making the client responsible for explicitly closing every actor that has ever been mentioned.
 
@@ -439,6 +441,10 @@ For web browsers, the introductory packet should have the following form:
 
   { "from":"root", "applicationType":"browser", "traits":<i>traits</i> }
 
+On Firefox OS, the introductory packet from the main <code>b2g</code> process has the form:
+
+  { "from":"root", "applicationType":"b2g", "traits":<i>traits</i> }
+
 == Listing Browser Tabs ==
 
 To get a list of the tabs currently present in a browser, a client sends the root actor a request of the form:
@@ -504,6 +510,66 @@ The client is now detached from the tab.
 == Chrome Debugging ==
 
 If the server supports debugging chrome code, the root actor's reply to a <code>"listTabs"</code> request includes a property named <code>"chromeDebugger"</code>, whose value is the name of a thread-like actor to which the client can attach to debug chrome code.
+
+== Firefox OS Subprocesses ==
+
+On Firefox OS, the main process, <code>b2g</code>, runs a debugging protocol server, but web pages and apps run in separate "content" processes. Other parts of Firefox OS that can participate in the debugging protocol may be in separate processes as well. To provide access to these, the <code>b2g</code> process's root actor can enumerate the other processes present in the system, allow clients to attach to them, and forward packets between the client and subprocesses.
+
+The initial greeting from a <code>b2g</code> root server has the form:
+
+  { "from":"root", "applicationType":"b2g", "subprocesses":[<i>subprocess</i>, ...], "selected":<i>selected</i>, "traits":<i>traits</i> }
+
+where each <i>subprocess</i> form describes a subprocess in the Firefox OS instance that offers a debugging protocol server. This includes content processes, supporting JavaScript debugging of web pages and apps, but it could also include any other sort of Firefox OS process that wanted to offer diagnostic, profiling, or debugging information via the protocol. If present, <i>selected</i> is an index into the array of subprocesses, indicating which one is currently being viewed in the Firefox OS user interface.
+
+Each <i>subprocess<i> form has at least the following properties:
+
+  { "type":<i>type</i>, "actor":<i>subprocessActor</i> }
+
+where <i>type</i> is a string identifying what sort of subprocess this is, and <i>subprocessActor</i> names an actor to which the client can attach to communicate with the subprocess. (Note that <i>subprocessActor</i> is not the subprocess's root actor name; it just represents the subprocess for the sake of "attach" requests.) All actor names mentioned in a list of subprocesses remain valid until the next time the subprocess list is requested, via a "listSubprocesses" request.
+
+A <i>subprocess</i> representing a content subprocess has the form:
+
+  { "type":"content", "actor":<i>subprocessActor</i>, "url":<i>url</i>, "title":<i>title</i> }
+
+where <i>url</i> is the URL of the web page or app the content subprocess is visiting, and <i>title</i> is the title of the web page or the name of the app.
+
+=== Attaching To Firefox OS Subprocesses ===
+
+To begin communicating with a subprocess's root actor, the client sends a request of the form:
+
+  { "to":<i>subprocessActor</i>, "type":"attach" }
+
+The server replies:
+
+  { "from":<i>subprocessActor</i>, "root":<i>subprocessRootActor</i> }
+
+where <i>subprocessRootActor</i> is the name of the root actor in the subprocess. (Note that this will not be <code>"root"</code>, as that name refers to the <code>b2g</code> process's own root actor.) After this reply should come an initial root actor greeting from <i>subprocessRootActor</i>.
+
+If a child process exits, crashes, or otherwise becomes unable to respond to further packets, the main process's root actor may fake error replies from subprocess actors of the form:
+
+  { "from":<i>deadActorName</i>, "error":"subprocessGone", "message":<i>message</i> }
+
+where <i>message</i> provides more details about why the subprocess is unexpectedly incommunicado.
+
+<i>Implementation note:</i> All actors in subprocess servers, including the subprocess's root actor, should have names with a common prefix chosen by the main process's server when the client attaches to the subprocess. The main process can then use this prefix to route client packets to the appropriate subprocess. Thus, the main process need only maintain a table mapping actor name prefixes to subprocess connections, instead of a table of all subprocesses' actors' names. In fact, the main process can remain entirely ignorant of what protocol the subprocess speaks, while still shuttling packets back and forth appropriately.
+
+=== Refreshing The Firefox OS Subprocess List ===
+
+To get a current list of subprocesses, the client can send a packet of this form to the <code>b2g</code> process's root actor:
+
+  { "to":"root", "type":"listSubprocesses" }
+
+The root actor will reply:
+
+  { "from":"root", "subprocesses":[<i>subprocess</i>, ...], "selected":<i>selected</i> }
+
+where the meanings of the <i>subprocess</i> list and the <i>selected</i> index are as described above for the initial greeting from a <code>b2g</code> root actor. Once this reply has been sent, only those subprocess actor names given are valid; all names mentioned in the root actor's initial greeting and prior <code>"listSubprocesses"</code> responses are invalid.
+
+When the set of live subprocesses changes, the <code>b2g</code> root actor sends the client a packet of the following form, unsolicited:
+
+  { "from":"root", "subprocessListChanged" }
+
+The client may then request a fresh subprocess list if it cares. The root actor sends this notification at most once per initial greeting or "listSubprocesses" response; it will not send it again until the client requests a fresh list. This notification has no effect on the set of valid actor names.
 
 = Interacting with Thread-Like Actors =
 
