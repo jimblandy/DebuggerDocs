@@ -951,4 +951,5 @@ Note that, like <code>eval</code>, declarations in the <i>code</i> passed to <co
 
 <!-- Local Variables: -->
 <!-- eval: (visual-line-mode) -->
+<!-- page-delimiter: "^=" -->
 <!-- End: -->

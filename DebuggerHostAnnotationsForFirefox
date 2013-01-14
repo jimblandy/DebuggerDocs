@@ -21,4 +21,5 @@ where <i>uri</i> is the URI passed to <code>Components.utils.import</code>.
 
 <!-- Local Variables: -->
 <!-- eval: (visual-line-mode) -->
+<!-- page-delimiter: "^=" -->
 <!-- End: -->

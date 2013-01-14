@@ -1005,4 +1005,5 @@ This closes communications with <i>breakpointActor</i>.
 
 <!-- Local Variables: -->
 <!-- eval: (visual-line-mode) -->
+<!-- page-delimiter: "^=" -->
 <!-- End: -->
