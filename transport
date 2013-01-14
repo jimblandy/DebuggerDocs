@@ -59,4 +59,5 @@ In our implementation of this Stream Transport, when a participant wishes to tra
 
 <!-- Local Variables: -->
 <!-- eval: (visual-line-mode) -->
+<!-- page-delimiter: "^=" -->
 <!-- End: -->
