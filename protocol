@@ -6,7 +6,9 @@ All communication between debugger (client) and browser (server) is in the form 
 
 The protocol operates at the JavaScript level, not at the C++ or machine level, and assumes that the JavaScript implementation itself is healthy and responsive. The JavaScript program being executed may well have gone wrong, but the JavaScript implementation's internal state must not be corrupt. Bugs in the implementation may cause the debugger to fail; bugs in the interpreted program must not.
 
-= Actors =
+= General Conventions =
+
+== Actors ==
 
 An <b>actor</b> is something on the server that can exchange JSON packets with the client. Every packet from the client specifies the actor to which it is directed, and every packet from the server indicates which actor sent it.
 
@@ -26,7 +28,7 @@ Note that the actor hierarchy does not, in general, correspond to any particular
 
 <i>(We are stealing the "actor" terminology from Mozilla's [[IPDL]], to mean, roughly, "things participating in the protocol". However, IPDL does much more with the idea than we do: it treats both client and server as collections of actors, and uses that detail to statically verify properties of the protocol. In contrast, the debugging protocol simply wants a consistent way to indicate the entities to which packets are directed.)</i>
 
-= Packets =
+== Packets ==
 
 The protocol is carried by a reliable, bi-directional byte stream; data sent in both directions consists of JSON objects, called packets. A packet is a top-level JSON object, not contained inside any other value.
 
@@ -50,7 +52,7 @@ where <i>actor</i> is the name of the non-existent actor. (It is strange to rece
 
 Clients should silently ignore packet properties they do not recognize. We expect that, as the protocol evolves, we will specify new properties that can appear in existing packets, and experimental implementations will do the same.
 
-= Requests and Replies =
+== Requests and Replies ==
 
 In this protocol description, a <b>request</b> is a packet sent from the client which always elicits a single packet from the recipient, the <b>reply</b>. These terms indicate a simple pattern of communication: at any given time, either the client or actor is permitted to send a packet to the other, but never both.
 
@@ -82,7 +84,7 @@ If an actor recieves a packet with a parameter whose value is inappropriate for 
 
 where <i>message</i> provides details to help debugger developers fix the problem. (Some packets' descriptions specify more specific errors for particular circumstances.)
 
-= Grips =
+== Grips ==
 
 A grip is a JSON value that refers to a specific JavaScript value in the debuggee. Grips appear anywhere an arbitrary value from the debuggee needs to be conveyed to the client: stack frames, object property lists, lexical environments, <tt>paused</tt> packets, and so on.
 
@@ -153,11 +155,11 @@ For example, the following table shows some JavaScript expressions and the grips
 
 Garbage collection will never free objects visible to the client via the protocol. Thus, actors representing JavaScript objects are effectively garbage collection roots.
 
-== Objects ==
+=== Objects ===
 
 While a thread is paused, the client can send requests to the actors appearing in object grips to examine the objects they represent in more detail.
 
-=== Property Descriptors ===
+==== Property Descriptors ====
 
 Protocol requests that describe objects' properties to the client often use <b>descriptors</b>, JSON values modeled after ECMAScript 5's property descriptors, to describe individual properties.
 
@@ -201,7 +203,7 @@ and sending a [[#Finding_An_Object's_Prototype_And_Properties|"prototypeAndPrope
                      }
   }
 
-=== Finding An Object's Prototype And Properties ===
+==== Finding An Object's Prototype And Properties ====
 
 To examine an object's prototype and properties, a client can send the object's grip's actor a request of the form:
 
@@ -219,7 +221,7 @@ with a <i>name</i>:<i>descriptor</i> pair for each of the object's own propertie
 
 <i>TODO: What about objects with many properties?</i>
 
-=== Finding an Object's Prototype ===
+==== Finding an Object's Prototype ====
 
 To find an object's prototype, a client can send the object's grip's actor a request of the form:
 
@@ -231,7 +233,7 @@ to which the grip actor replies:
 
 where <i>prototype</i> is a grip on the object's prototype (possibly <tt>{ "type":"null" }</tt>).
 
-=== Listing an Object's Own Properties' Names ===
+==== Listing an Object's Own Properties' Names ====
 
 To list an object's own properties' names, a client can send the object's grip's actor a request of the form:
 
@@ -243,7 +245,7 @@ to which the grip actor replies:
 
 where each <i>name</i> is a string naming an own property of the object.
 
-=== Finding Descriptors For Single Properties ===
+==== Finding Descriptors For Single Properties ====
 
 To obtain a descriptor for a particular property of an object, a client can send the object's grip's actor a request of the form:
 
@@ -287,7 +289,7 @@ where <i>get</i> and <i>set</i> are grips on the property's getter and setter fu
 
 <i>TODO: descriptors for Harmony proxies</i>
 
-=== Functions ===
+==== Functions ====
 
 If an object's class as given in the grip is <code>"Function"</code>, then the grip's actor responds to the messages given here.
 
@@ -325,7 +327,7 @@ If <i>functionGripActor</i>'s referent is not a function, or is a function proxy
 
 where <i>message</i> is a string containing any additional information that would be helpful to debugger developers.
 
-== Long Strings ==
+=== Long Strings ===
 
 The client can find the full contents of a long string by sending a request to the long string grip actor of the form:
 
@@ -339,7 +341,7 @@ where <i>string</i> is the requested portion of the string the actor represents.
 
 As with any other actor, the client may only send messages to a long string grip actor while it is alive: for [[#Grip_Lifetimes|pause-lifetime grips]], until the debuggee is resumed; or for [[#Grip_Lifetimes|thread-lifetime grips]], until the thread is detached from or exits. However, unlike object grip actors, the client may communicate with a long string grip actor at any time the actor is alive, regardless of whether the debuggee is paused. (Since strings are immutable values in JavaScript, the responses from a long string grip actor cannot depend on the actions of the debuggee.)
 
-== Grip Lifetimes ==
+=== Grip Lifetimes ===
 
 Most grips are <b>pause-lifetime</b> grips: they last only while the JavaScript thread is paused, and become invalid as soon as the debugger allows the thread to resume execution. (The actors in pause-lifetime grips are children of an actor that is closed when the thread resumes, or is detached from.) This arrangement allows the protocol to use grips freely in responses without requiring the client to remember and close them all.
 
@@ -381,7 +383,7 @@ where each <i>gripActor</i> is the name of a child of <i>thread</i> that should 
 
 Regardless of the lifetime of a grip, the client may only send messages to object grip actors while the thread to which they belong is paused; the client's interaction with mutable values cannot take place concurrently with the thread.
 
-= Completion Values =
+== Completion Values ==
 
 Some packets describe the way a stack frame's execution completed using a <b>completion value</b>, which takes one of the following forms:
 
@@ -397,7 +399,7 @@ This indicates that the frame threw an exception; <i>grip</i> is the exception v
 
 This indicates that the frame's execution was terminated, as by a "slow script" dialog box or running out of memory.
 
-= Source Locations =
+== Source Locations ==
 
 Many packets refer to particular locations in source code: breakpoint requests specify where the breakpoint should be set; stack frames show the current point of execution; and so on.
 
