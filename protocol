@@ -439,37 +439,68 @@ For web browsers, the introductory packet should have the following form:
 
   { "from":"root", "applicationType":"browser", "traits":<i>traits</i> }
 
-== Listing Top-Level Browsing Contexts ==
+== Listing Browser Tabs ==
 
-To get a list of the top-level browsing contexts (tabs) present in a browser, a client should send a request like the following to the root actor:
+To get a list of the tabs currently present in a browser, a client sends the root actor a request of the form:
 
-  { "to":"root", "type":"listContexts" }
+  { "to":"root", "type":"listTabs" }
 
-The reply should have the form:
+The root actor will send a reply of the form:
 
-  { "from":"root", "contexts":[<i>context</i>...], selected:<i>index</i> }
+  { "from":"root", "tabs":[<i>tab</i>, ...], "selected":<i>selected</i>,
+    "chromeDebugger":<i>chromeDebuggerActor</i> }
 
-The <tt>contexts</tt> property's value is an array with one element for each top-level browsing context present in the browser, and <i>index</i> is the index within that list of the browsing context the user is currently interacting with. Each <i>context</i> has the following form:
+where each <i>tab</i> describes a single open tab; <i>selected</i> is the index in the array of tabs of the currently selected tab; and <i>chromeDebuggerActor</i> is a thread-like actor to which the client can attach to debug chrome code.
 
-  { "actor":<i>actor</i>, "title":<i>title</i>, "url":<i>url</i> }
+Each <i>tab</i> has the form:
 
-<i>actor</i> is the actor representing that top-level browsing context; <i>title</i> is the context's document's title, and <i>url</i> is the context's document's URL.
+  { "actor":<i>tabActor</i>, "title":<i>title</i>, "url":<i>URL</i> }
 
-Clients should send "listContexts" requests only to root actors that have identified themselves as browsers.
+where <i>tabActor</i> is the name of an actor representing the tab, and <i>title</i> and <i>URL</i> are the title and URL of the web page currently visible in that tab.
 
-Actor names given in a list-contexts reply are children of the root actor. They remain valid at least until the next list-contexts request is received. If the client attaches to a context actor, its name is valid at least until the client detaches from the context and receives a "detached" packet from the context, or until the client sends a "release" packet to the context. (These packets are described in detail in [[#Interacting_with_Thread-Like_Actors|Interacting with Thread-Like Actors]].)
+To attach to a <i>tabActor</i>, a client sends a message of the form:
 
-For example, upon connection to a web browser visiting two pages at example.com, the root actor's introductory packet might look like this:
+  { "to":<i>tabActor</i>, "type":"attach" }
 
-  { "from":"root", "applicationType":"browser",
-    "contexts":[ { "actor":"context1", "title":"Fruits",
-                   "url":"http://www.example.com/fruits/" },
-                 { "actor":"context2", "title":"Bats",
-                   "url":"http://www.example.com/bats/" }]}
+The tab actor will send a reply of the form:
 
-<i>(This may not be the right information to provide in these packets; suggestions very welcome. The point here is to give the debugger enough information to select which context it would like to debug without having to do too many round trips. Round trips are bad for UI responsiveness, but large packets are probably not a problem, so whatever would help to add, we should add.)</i>
+  { "from":<i>tabActor</i>, "type":"tabAttached", "threadActor":<i>tabThreadActor</i> }
 
-<i>There are other, more important ways this may be wrong-headed. In traditional Firefox, there is only one thread for all chrome and content. One can't attach to different tabs and then continue them independently; they're all sharing the same stack. This will still be true to some extent even when we have out-of-process content, because you'll necessarily have groups of tabs sharing a thread. The thread actor interactions described below seem like the right way to interact with a thread, but we need to explain how we select some parts of the browser to debug and others to ignore.</i>
+where <i>tabThreadActor</i> is the name of a thread-like actor representing the web page the tab currently displays.
+
+If the user closes the tab before the client attaches to it, <i>tabActor</i> will send an reply of the form:
+
+  { "from":<i>tabActor</i>, "type":"exited" }
+
+When the client is no longer interested in interacting with the tab, it can send a request of the form:
+
+  { "to":<i>tabActor</i>, "type":"detach" }
+
+The <i>tabActor</i> will reply:
+
+  { "from":<i>tabActor</i>, "type":"detached" }
+
+If the client was not already attached to <i>tabActor</i>, it sends an error reply of the form:
+
+  { "from":<i>tabActor</i>, "error":"wrongState" }
+
+While the client is attached, <i>tabActor</i> sends unsolicited notifications to the client whenever the user navigates the tab to a new page. When navigation begins, <i>tabActor</i> sends a packet of the form:
+
+  { "from":<i>tabActor</i>, "type":"tabNavigated", "state":"start",
+    "url":<i>newURL</i> }
+
+This indicates that the tab has begun navigating to <i>newURL</i>; JavaScript execution in the tab's prior page is suspended. When navigation is complete, <i>tabActor</i> sends a packet of the form:
+
+  { "from":<i>tabActor</i>, "type":"tabNavigated", "state":"stop",
+     "url":<i>newURL</i>, "title":<i>newTitle</i> }
+
+where <i>newURL</i> and <i>newTitle</i> are the URL and title of the page the tab is now showing. The <i>tabThreadActor</i> given in the response to the original <code>"attach"</code> request is now debugging the new page's code.
+
+If the user closes a tab to which the client is attached, its <i>tabActor</i> sends an unsolicited packet of the form:
+
+  { "from":<i>tabActor</i>, "type":"tabDetached" }
+
+The client is now detached from the tab.
 
 = Interacting with Thread-Like Actors =
 
