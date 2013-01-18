@@ -445,42 +445,41 @@ To get a list of the tabs currently present in a browser, a client sends the roo
 
   { "to":"root", "type":"listTabs" }
 
-The root actor will send a reply of the form:
+The root actor replies:
 
-  { "from":"root", "tabs":[<i>tab</i>, ...], "selected":<i>selected</i>,
-    "chromeDebugger":<i>chromeDebuggerActor</i> }
+  { "from":"root", "tabs":[<i>tab</i>, ...], "selected":<i>selected</i> }
 
-where each <i>tab</i> describes a single open tab; <i>selected</i> is the index in the array of tabs of the currently selected tab; and <i>chromeDebuggerActor</i> is a thread-like actor to which the client can attach to debug chrome code.
+where each <i>tab</i> describes a single open tab, and <i>selected</i> is the index in the array of tabs of the currently selected tab. This form may have other properties describing other global actors; for one example, see [[#Chrome_Debugging|Chrome Debugging]].
 
 Each <i>tab</i> has the form:
 
   { "actor":<i>tabActor</i>, "title":<i>title</i>, "url":<i>URL</i> }
 
-where <i>tabActor</i> is the name of an actor representing the tab, and <i>title</i> and <i>URL</i> are the title and URL of the web page currently visible in that tab.
+where <i>tabActor</i> is the name of an actor representing the tab, and <i>title</i> and <i>URL</i> are the title and URL of the web page currently visible in that tab. This form may have other properties describing other tab-specific actors.
 
 To attach to a <i>tabActor</i>, a client sends a message of the form:
 
   { "to":<i>tabActor</i>, "type":"attach" }
 
-The tab actor will send a reply of the form:
+The tab actor replies:
 
   { "from":<i>tabActor</i>, "type":"tabAttached", "threadActor":<i>tabThreadActor</i> }
 
-where <i>tabThreadActor</i> is the name of a thread-like actor representing the web page the tab currently displays.
+where <i>tabThreadActor</i> is the name of a thread-like actor representing the tab's current content. If the user navigates the tab, <i>tabThreadActor</i> switches to the new content; we do not create a separate thread-like actor each page the tab visits.
 
-If the user closes the tab before the client attaches to it, <i>tabActor</i> will send an reply of the form:
+If the user closes the tab before the client attaches to it, <i>tabActor</i> replies:
 
   { "from":<i>tabActor</i>, "type":"exited" }
 
-When the client is no longer interested in interacting with the tab, it can send a request of the form:
+When the client is no longer interested in interacting with the tab, the client can request:
 
   { "to":<i>tabActor</i>, "type":"detach" }
 
-The <i>tabActor</i> will reply:
+The <i>tabActor</i> replies:
 
   { "from":<i>tabActor</i>, "type":"detached" }
 
-If the client was not already attached to <i>tabActor</i>, it sends an error reply of the form:
+If the client was not already attached to <i>tabActor</i>, <i>tabActor</i> sends an error reply of the form:
 
   { "from":<i>tabActor</i>, "error":"wrongState" }
 
@@ -501,6 +500,10 @@ If the user closes a tab to which the client is attached, its <i>tabActor</i> se
   { "from":<i>tabActor</i>, "type":"tabDetached" }
 
 The client is now detached from the tab.
+
+== Chrome Debugging ==
+
+If the server supports debugging chrome code, the root actor's reply to a <code>"listTabs"</code> request includes a property named <code>"chromeDebugger"</code>, whose value is the name of a thread-like actor to which the client can attach to debug chrome code.
 
 = Interacting with Thread-Like Actors =
 
