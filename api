@@ -612,6 +612,12 @@ Note that, if breakpoints using other handler objects are set at the same locati
 <dt>clearAllBreakpoints([<i>offset</i>])
 <dd>Remove all breakpoints set in this script. If <i>offset</i> is present, remove all breakpoints set at that offset in this script; if <i>offset</i> is not a valid bytecode offset in this script, throw an error.
 
+<dt>getFlowGraph()
+<dd>Return an array representing the script's control flow graph.
+
+Let a <i>target</i> be the offset of a bytecode in the script that is either the script's entry point, the target of a branch, the immediate successor of a conditional branch (that is, the bytecode which would be executed next if the branch is <i>not</i> taken), or an exit point: the last bytecode in the script executed before the script's frame is popped.
+
+The returned array is a sparse JavaScript array object. For every target <i>t</i>, the array's <i>t</i>'th element is itself an array listing all the targets that execution can reach from <i>t</i> without first reaching any other intervening targets. For exit points, the array holds <code>null</code>.
 </dl>
 
 == Debugger.Object ==
