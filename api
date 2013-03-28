@@ -844,6 +844,11 @@ The new watchpoint belongs to the <code>Debugger</code> instance to which this <
 
 <dt>unwrap()
 <dd>If the referent is a wrapper that this <code>Debugger.Object</code>'s compartment is permitted to unwrap, return a <code>Debugger.Object</code> instance referring to the wrapped object. If we are not permitted to unwrap the referent, return <code>null</code>. If the referent is not a wrapper, return this <code>Debugger.Object</code> instance unchanged.
+
+<dt>unsafeDereference()
+<dd>Return the referent of this <code>Debugger.Object</code> instance.
+
+This method pierces the membrane of <code>Debugger.Object</code> instances meant to protect debugger code from debuggee code, and allows debugger code to access debuggee objects through the standard cross-compartment wrappers, rather than via <code>Debugger.Object</code>'s reflection-oriented interfaces. This method makes it easier to gradually adapt large code bases to this Debugger API: adapted portions of the code can use <code>Debugger.Object</code> instances, but use this method to pass direct object references to code that has not yet been updated.
 </dl>
 
 == Debugger.Environment ==
