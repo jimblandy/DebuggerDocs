@@ -533,17 +533,13 @@ Each <i>childProcess<i> form has at least the following properties:
 
 where <i>type</i> is a string identifying what sort of child process this is, and <i>childProcessActor</i> names an actor to which the client can attach to communicate with the child. (Note that <i>childProcessActor</i> is not the child's root actor name; it just represents the child for the sake of "attach" requests.) All actor names mentioned in a list of children remain valid until the next <code>"listChildProcesses"</code> request.
 
-A <i>childProcess</i> representing a content child process or app has the form:
-
-  { "type":"content", "actor":<i>childProcessActor</i>, "url":<i>url</i>, "title":<i>title</i> }
-
-where <i>url</i> is the URL of the web page or app the content child is visiting, and <i>title</i> is the title of the web page or the name of the app.
+In a <i>childProcess</i> form representing a content child process or app, <i>type</i> is <code>"content"</code>.
 
 Once a <code>"listChildProcesses"</code> reply has been sent, only those child process actor names given are valid; other names mentioned in prior <code>"listChildProcesses"</code> responses are invalid.
 
 If the root actor replies to a <code>"listChildProcesses"</code> request, and then the set of live children changes, the <code>b2g</code> root actor sends the client a packet of the following form, unsolicited:
 
-  { "from":"root", "childProcessesChanged" }
+  { "from":"root", "type":"childProcessesChanged" }
 
 The client may then request a fresh child process list if it cares. The root actor sends this notification at most once per <code>"listChildProcesses"</code> response; it will not send it again until the client requests a fresh list. This notification has no effect on the set of valid actor names.
 
