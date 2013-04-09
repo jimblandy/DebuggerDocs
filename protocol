@@ -768,6 +768,35 @@ where <i>message</i> is text that could be displayed to users explaining why the
 
 (Taken together, the <tt>"threadWouldRun"</tt> error name and the <i>cause</i> value should allow the debugger to present an appropriately localized error message.)
 
+== Loading Script Sources ==
+
+To get a snapshot of all sources currently loaded by the thread actor, the client can send the following packet:
+
+  { to: <i>threadActorID</i>,
+    type: "sources" }
+
+The response packet has the following form:
+
+  { from: <i>threadActorID</i>,
+    sources: [<i>sourceForm1</i>, <i>sourceForm2</i>, ..., <i>sourceFormN</i>] }
+
+Where each <i>sourceForm</i> has the following form:
+
+  { actor: <i>sourceActorID</i>,
+    url: <i>sourceURL</i> }
+
+Each source actor exists throughout the thread's whole lifetime.
+
+To get the contents of a source, send the corresponding source actor the following packet:
+
+  { to: <i>sourceActorID</i>,
+    type: "source" }
+
+And the source actor replies with a packet of the following form:
+
+  { from: <i>sourceActorID</i>,
+    source: <i>contentsOfSource</i> }
+
 == Listing Stack Frames ==
 
 To inspect the thread's JavaScript stack, the client can send the following request:
