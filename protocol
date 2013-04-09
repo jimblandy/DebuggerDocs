@@ -501,33 +501,6 @@ If the user closes a tab to which the client is attached, its <i>tabActor</i> se
 
 The client is now detached from the tab.
 
-== Loading Script Sources ==
-
-Send
-
-  { to: <i>threadActorID</i>,
-    type: "sources" }
-
-Receive
-
-  { from: <i>threadActorID</i>,
-    sources: [<i>sourceForm1</i>, <i>sourceForm2</i>, ..., <i>sourceFormN</i>] }
-
-where each <i>sourceForm</i> has the following form
-
-  { actor: <i>sourceActorID</i>,
-    url: <i>sourceURL</i> }
-
-Each source actor can be queried for the contents of its source
-
-  { to: <i>sourceActorID</i>,
-    type: "source" }
-
-and will reply
-
-  { from: <i>sourceActorID</i>,
-    source: <i>contentsOfSource</i> }
-
 == Chrome Debugging ==
 
 If the server supports debugging chrome code, the root actor's reply to a <code>"listTabs"</code> request includes a property named <code>"chromeDebugger"</code>, whose value is the name of a thread-like actor to which the client can attach to debug chrome code.
@@ -794,6 +767,33 @@ where <i>message</i> is text that could be displayed to users explaining why the
 |}
 
 (Taken together, the <tt>"threadWouldRun"</tt> error name and the <i>cause</i> value should allow the debugger to present an appropriately localized error message.)
+
+== Loading Script Sources ==
+
+To get a list of sources, the client can send the following packet:
+
+  { to: <i>threadActorID</i>,
+    type: "sources" }
+
+The returned packet will have the following form:
+
+  { from: <i>threadActorID</i>,
+    sources: [<i>sourceForm1</i>, <i>sourceForm2</i>, ..., <i>sourceFormN</i>] }
+
+Where each <i>sourceForm</i> has the following form:
+
+  { actor: <i>sourceActorID</i>,
+    url: <i>sourceURL</i> }
+
+Each source actor can be queried for the contents of its source:
+
+  { to: <i>sourceActorID</i>,
+    type: "source" }
+
+And the source actor will reply with a packet of the following form:
+
+  { from: <i>sourceActorID</i>,
+    source: <i>contentsOfSource</i> }
 
 == Listing Stack Frames ==
 
