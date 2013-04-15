@@ -457,6 +457,16 @@ Each <i>tab</i> has the form:
 
 where <i>tabActor</i> is the name of an actor representing the tab, and <i>title</i> and <i>URL</i> are the title and URL of the web page currently visible in that tab. This form may have other properties describing other tab-specific actors.
 
+The actors mentioned in a <code>"listTabs"</code> reply live at least until the client next sends a <code>"listTabs"</code> request. Any tabs still open at that time will have their actors listed again in the new reply, under the same names as before. (Note that a tab's title and URL may have changed, if it has been navigated.) Any tab actors not mentioned in the new reply are now closed.
+
+If the server has replied to a <code>"listTabs"</code> request, and then the user closes a tab or opens a new tab, the server sends the client a notification packet of the form:
+
+  { "actor":"root", "type":"tabListChanged" }
+
+If the client is interested in maintaining a live list of tabs, it may then send another <code>"listTabs"</code> request to refresh its list. The server sends this notification only once per <code>"listTabs"</code> request, to avoid flooding the client, and to avoid traffic in the case where the client no longer cares about the tab list. This notification has no effect on the set of live tab actor names; although the tabs themselves may be gone, all tab <i>actors</i> mentioned in the prior <code>"listTabs"</code> reply are still alive, and will remain so at least until the client next sends a new <code>"listTabs"</code> request. (Note that re-fetching the entire tab list is the only way to find out what has changed; the <code>"tabListChanged"</code> notification carries no details about which tabs have come or gone, and there is no packet that requests only the changes to the tab list.)
+
+<i>TODO: We should notify the client when tabs navigate, too: the "title" and "url" properties on the "tab" form may have changed. However, the present code doesn't listen for tab navigations until we've attached to the tab actor, so this should be a separate project.</i>
+
 To attach to a <i>tabActor</i>, a client sends a message of the form:
 
   { "to":<i>tabActor</i>, "type":"attach" }
