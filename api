@@ -639,6 +639,9 @@ A <code>Debugger.Object</code> instance inherits the following accessor properti
 <dt>class
 <dd>A string naming the ECMAScript <code><nowiki>[[Class]]</nowiki></code> of the referent.
 
+<dt>printableLabel
+<dd>A string providing some description of what sort of object the referent is, suitable for inclusion in a printed representation of the object. The string has no particular semantics; it can be whatever the embedding expects to be useful for developers.
+
 <dt>callable
 <dd><code>true</code> if the referent is a callable object (such as a function or a function proxy); false otherwise.
 
