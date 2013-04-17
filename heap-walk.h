@@ -6,6 +6,8 @@
 #ifndef mozilla_tools_HeapWalk_h
 #define mozilla_tools_HeapWalk_h
 
+#include <stdint.h>
+
 /*
  * This is a draft header for an interface not yet implemented. You can
  * fork this specification on GitHub to draft and discuss revisions:
@@ -84,11 +86,72 @@
  * leaves the details to its clients.)
  */
 
+namespace js {
+struct JSObject;
+struct JSString;
+struct JSScript;
+class Shape;
+namespace ion {
+class IonCode;
+}
+}
+
 namespace mozilla {
 
+#define UNIFORMHEAP_NODE_KINDS(f)       \
+    f(Object,    JSObject)              \
+    f(String,    JSString)              \
+    f(Script,    JSScript)              \
+    f(Ioncode,   js::ion::IonCode)      \
+    f(Shape,     js::Shape)             \
+    f(BaseShape, js::BaseShape)         \
+    /* end */
+
 class UniformHeap {
-    
+  public:
+    class Node {
+        enum Kind {
+#define UNIFORMHEAP_DECL(name, referentType) kind ## name,
+            UNIFORMHEAP_NODE_KINDS(UNIFORMHEAP_DECL)
+            kindCount
+#undef UNIFORMHEAP_DECL
+        };
+
+#ifdef JS_BYTES_PER_WORD == 8
+      private:
+        intptr_t tagged;
+        static const int tag_bits = 4;
+        void *pointer() const { return reinterpret_cast<void *>(tagged >> tag_bits); }
+        Kind tag() const { return reinterpret_cast<Kind>(tagged & ((1 << tag_bits) - 1)); }
+
+      public:
+        Node(void *pointer, Kind tag) {
+            assert(0 <= tag && tag < kindCount);
+            intptr_t address = reinterpret_cast<intptr_t>(pointer);
+            tagged = (address << tag_bits) | reinterpret_cast<intptr_t>(tag);
+            assert(this.pointer() == pointer);
+            assert(this.tag() == tag);
+        }
+        Node (const Node &rhs) : tagged(rhs.tagged) { }
+        Node &operator=(const Node &rhs) { tagged = rhs.tagged; }
+        bool operator==(const Node &rhs) const { return tagged == rhs.tagged; }
+
+        struct Hasher {
+            typedef Node Lookup;
+            static js::HashNumber hash(const Lookup &l) { return l.tagged; }
+            static bool match(const Node &key, const Lookup &l) {
+                return key == l;
+            }
+        };
+
+#else
+#error "mozilla::UniformHeap::Node not implemented for target architecture"
+#endif
+    };
+
 };
+
+#undef UNIFORMHEAP_NODE_KINDS
 
 }  // namespace mozilla
 
