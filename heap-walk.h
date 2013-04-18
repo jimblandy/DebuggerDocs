@@ -18,8 +18,8 @@
  * JavaScript objects, those depend on a wide variety of backing data
  * structures, which use different allocation disciplines and have complex
  * internal relationships. Thus, simply discerning the form of the heap
- * graph&mdash;identifying edges, understanding which are owning references
- * and which are weak, and so on&mdash;is a daunting task, requiring detailed
+ * graph --- identifying edges, understanding which are owning references
+ * and which are weak, and so on --- is a daunting task, requiring detailed
  * knowlege of many different areas of Firefox.
  *
  * Even given the means to traverse this heterogenous graph, presenting the
@@ -51,7 +51,7 @@
  * that respect their equality relation; and can be serialized and
  * deserialized in a way that preserves their identity. UniformNode values are
  * small, and require no supporting data structures, making them feasible for
- * use in memory-constrained devices&mdash;ideally, the memory requirements of
+ * use in memory-constrained devices --- ideally, the memory requirements of
  * the algorithm which uses them will be the limiting factor, not the demands
  * of UniformNode itself. Given this interface, one can implement heap
  * analysis algorithms independent of the details of the heap under study.
@@ -75,7 +75,7 @@
  * visible edges along the path.
  *
  * (Why must UniformNode expose non-visible nodes at all? Heap analyses
- * compute facts about the heap&mdash;for example, dominator analysis produces
+ * compute facts about the heap --- for example, dominator analysis produces
  * the retained size of each node. However, these are facts about the true
  * graph; how one can best present them in the collapsed view, which includes
  * only visible nodes, depends on the analysis. Only the analysis code itself
@@ -152,6 +152,7 @@ class UniformNode {
   public:
     UniformNode(void *pointer, Kind kind) {
         assert(0 <= kind && kind < kindCount);
+        assert(kindCount <= 1 << kind_bits);
         intptr_t address = reinterpret_cast<intptr_t>(pointer);
         tagged = (address << kind_bits) | reinterpret_cast<intptr_t>(kind);
         assert(this.pointer() == pointer);
