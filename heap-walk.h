@@ -140,7 +140,7 @@ class UniformNode {
 #define UNIFORMNODE_DECL_KIND(Name, Type) kind ## Name,
         UNIFORMNODE_FOR_EACH_KIND(UNIFORMNODE_DECL_KIND)
         kindCount
-#undef UNIFORMNODE_DECL
+#undef UNIFORMNODE_DECL_KIND
     };
 
 #ifdef JS_BYTES_PER_WORD == 8
@@ -392,7 +392,7 @@ class UniformNode {
     }
 };
 
-#undef UNIFORMNODE_KINDS
+#undef UNIFORMNODE_FOR_EACH_KIND
 
 /*
  * Establish UniformNode::Hasher as the default hash policy for UniformNode
