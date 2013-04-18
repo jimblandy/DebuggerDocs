@@ -157,6 +157,16 @@ class UniformNode {
 #error "mozilla::UniformNode not implemented for target architecture"
 #endif
 
+    struct SourceLocation {
+        const char *URL;
+        int line, column;
+    };
+
+    struct CallStack { // Should use some extant type for this. Or at least js::Vector.
+        SourceLocation *frame;
+        size_t frameCount;
+    };
+
     /*
      * Each specialization of this template represents a statically-typed
      * reference to a particular variant of UniformNode, providing reflection
@@ -171,15 +181,67 @@ class UniformNode {
      *     static const Kind kind;
      *         The Kind value used for UniformNodes referring to T.
      *
-     *     static const char *name;
+     *     static const char *kindName;
      *         The name of the referent type, as a C string.
      *
      *     bool visible() const;
      *         True if this node is something that could be presented to
      *         JavaScript developers in analyses.
      *
+     *     jschar *constructor()
+     *         If available, the name of the constructor (JS or C++) used to
+     *         create this Node's referent. For Variant<JSObject *>, this
+     *         could use information saved by the JavaScript engine. For XPCOM
+     *         objects, perhaps the cycle collector has some metadata. If no
+     *         information is available, return NULL.
+     *
+     *     allocationLocation(SourceLocation *sourceLocation)
+     *         If available, return the source location at which this object
+     *         was allocated. Sometimes the JavaScript engine saves this data-
+     *         for object and array literals, perhaps.
+     *
+     *     allocationCallStack(CallStack *callStack)
+     *         If available, fill |*callStack| with the source location
+     *         (either in JS or C++) at which this Node's referent was
+     *         allocated. (If Firefox was built with refcount tracing, then I
+     *         *think* that means we log call stacks for each AddRef and
+     *         Release; couldn't we present the first AddRef here?)
+     *
      *     class EdgeRange
-     *         A class for iterating over a node's outgoing edges.
+     *         A class for iterating over a node's outgoing edges, modeled
+     *         after js::HashTable<K,V>::Range. Each Variant<T> has its own
+     *         EdgeRange class definition, but all EdgeRange classes support
+     *         the following interface:
+     *
+     *            // True if there are no more edges in this range.
+     *            bool empty() const;
+     *
+     *            // The name for the front edge in this range. (In real life
+     *            // we'll want a better representation for edge names, to
+     *            // avoid creating tons of strings when the names follow a
+     *            // pattern; and we'll need to think about lifetimes
+     *            // carefully to ensure traversal stays cheap.)
+     *            char *frontName() const;
+     *
+     *            // The referent of the front edge in this range, or some
+     *            // special UniformNode 'null' value if the referent is not
+     *            // an allocated object (say, a numeric jsval).
+     *            UniformNode frontReferent() const;
+     *
+     *            // Whether the front edge of this range should be visible to
+     *            // JavaScript developers.
+     *            bool frontVisible() const;
+     *
+     *         Instances of this class need not be as lightweight as
+     *         UniformNode itself, since they're usually only instantiated as
+     *         part of a stack frame, while iterating over a particular
+     *         object's edges. For example, a dumb implementation for JS Cells
+     *         might use JS_TraceChildren to to get the outgoing edges, and
+     *         then store them in an array internal to the EdgeRange.
+     *
+     *         When used with 'match', below, template operator()
+     *         instances will have the appropriate EdgeRange's member
+     *         functions inlined.
      *
      * Individual specializations may provide additional members appropriate
      * to their variant.
@@ -189,45 +251,55 @@ class UniformNode {
       public:
         typedef T referent;
         Variant(T *ptr) : ptr(ptr) { }
-        Variant(const UniformNode &node) {
-            assert(node.kind() == Variant<T>::kind);
-            ptr = reinterpret_cast<T *>(node.pointer());
-        }
+        Variant(const UniformNode &node) : ptr(node.as<T>()) { }
         T *get() { return ptr; }
+        class EdgeRange;
     };
 
     template<> class Variant<JSObject> {
         static const Kind kind = KindObject;
-        static const char *name = "JSObject";
+        static const char *kindName = "JSObject";
     };
     template<> class Variant<JSString> {
         static const Kind kind = KindString;
-        static const char name = "JSString";
+        static const char kindName = "JSString";
     };
     template<> class Variant<JSScript> {
         static const Kind kind = KindScript;
-        static const char name = "JSScript";
+        static const char kindName = "JSScript";
     };
     template<> class Variant<js::ion::IonCode> {
         static const Kind kind = KindIonCode;
-        static const char name = "js::ion::IonCode";
+        static const char kindName = "js::ion::IonCode";
     };
     template<> class Variant<js::Shape> {
         static const Kind kind = KindShape;
-        static const char name = "js::Shape";
+        static const char kindName = "js::Shape";
     };
     template<> class Variant<js::BaseShape> {
         static const Kind kind = KindBaseShape;
-        static const char name = "js::BaseShape";
+        static const char kindName = "js::BaseShape";
     };
 
     /* is<T>() is true if this UniformNode points to a T, false otherwise. */
     template <typename T> bool is() const { return kind() == Traits<T>.kind; }
 
-    /* as<T>() returns a T * if this UniformNode points to a T, or NULL otherwise. */
+    /*
+     * as<T>() returns a T * if this UniformNode points to a T, or asserts
+     * otherwise.
+     */
     template <typename T> T *as() const {
-        if (kind() == Traits<T>.kind)
-            return reinterpret_cast<T *>(pointer());
+        assert(kind() == Traits<T>.kind);
+        return reinterpret_cast<T *>(pointer());
+    }
+
+    /*
+     * AsOrNull<T>() returns a T * if this UniformNode points to a T, or
+     * returns NULL otherwise.
+     */
+    template <typename T> T *asOrNull() const {
+        if (kind () == Traits<T>.kind)
+            return as<T>();
         else
             return NULL;
     }
@@ -253,22 +325,23 @@ class UniformNode {
      *     }
      *     template<T>
      *     const char *operator()(T *ptr) {
-     *         return UniformNode::Variant<T>::name;
+     *         return UniformNode::Variant<T>::kindName;
      *     }
      * };
      *
-     * Here, NODE->match<ClassOrTypeName>() evaluates to a name for the type
-     * of thing NODE refers to, but returns the object class if NODE refers to
-     * a JSObject. The first overloading of operator() handles the JSObject
-     * case, and takes advantage of the specific type to call its getClass()
-     * member. The second overloading handles all the other variants, and uses
+     * Given that definition, NODE->match(ClassOrTypeName()) would evaluate to
+     * a name for the type of thing NODE refers to, except in the JSObject
+     * case where it returns the object's class name. ClassOrTypeName's first
+     * overloading of operator() handles the JSObject case, and takes
+     * advantage of knowing the exact type to call JSObject::getClass(). The
+     * second overloading handles all the other UniformNode variants, and uses
      * UniformNode::Variant to pick out the right information for its variant.
      *
-     * Note that this can be useful even if you only define a template<T>
-     * which does everything it needs to using Variant<T>: each instantiation
-     * of C::operator() gets compiled separately, using the appropriate types
-     * and inlined method definitions, so it's just as efficient as writing
-     * out a switch with separate code for each variant.
+     * Note that this can be useful even if you only define a template member
+     * function which does everything it needs to using Variant<T>: each
+     * instantiation of C::operator() gets compiled separately, using the
+     * appropriate types and inlined method definitions, so it's just as
+     * efficient as writing out a switch with separate code for each variant.
      */
     template<typename C>
     typename C::result match(const C &c) const {
