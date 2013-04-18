@@ -82,6 +82,35 @@
  * can accurately and meaningfully aggregate its results. Thus, UniformNode
  * exposes the information needed to do so, but leaves the details to its
  * clients.)
+ *
+ * UniformNode has a serious limitation: it is not meant for use while the
+ * heap is being changed by other code. Requiring UniformNode instances to be
+ * registered with the collector, to allow a moving collector to update them,
+ * would make them infeasibly expensive. (Imagine presenting the collector
+ * with a large HashMap using UniformNodes as keys.) Assuming that the heap
+ * does not change also greatly simplifies both UniformNode's own
+ * implementation, and those of the algorithms that use it.
+ *
+ * Instead, analyses should use UniformNode to make a snapshot of the heap
+ * (either in memory or serialized), or to run the full algorithm, while other
+ * uses of the heap are suspended. Assuming nodes are not used by multiple
+ * threads, it should be sufficient to avoid running JavaScript in the
+ * JSRuntime being analyzed; avoid actively using XPCOM objects; and avoid
+ * returning to the event loop. (This means showing progress meters will be a
+ * challenge, if it's possible to do so at all; offering up-front estimates
+ * based on overall heap size may be an acceptable alternative.)
+ *
+ * (The threading question is interesting, and we need to think that through
+ * carefully. If I understand correctly, JavaScript objects are never shared
+ * between threads, other than those used internally by the engine. Web
+ * workers use their own JSRuntime, and inter-JSRuntime edges are not
+ * permitted. Background finalization threads shouldn't affect reachable
+ * portions of the heap, so they don't affect us. I don't think the JS engine
+ * has threads that muck around with reachable objects in parallel with the
+ * main thread, but we can check. If those assumptions are true, then simply
+ * not calling JavaScript and not returning to the event loop while we use
+ * UniformNode should suffice. I don't know if / when XPCOM objects are shared
+ * between threads, but I suspect that will be all right in practice, too.)
  */
 
 namespace js {
@@ -189,19 +218,24 @@ class UniformNode {
      *         True if this node is something that could be presented to
      *         JavaScript developers in analyses.
      *
-     *     jschar *constructor()
+     *     JSCompartment *compartment() const;
+     *         Return the compartment to which this UniformNode referent
+     *         belongs, or NULL if the object doesn't clearly belong to any
+     *         particular compartment.
+     *
+     *     jschar *constructor() const;
      *         If available, the name of the constructor (JS or C++) used to
      *         create this Node's referent. For Variant<JSObject *>, this
      *         could use information saved by the JavaScript engine. For XPCOM
      *         objects, perhaps the cycle collector has some metadata. If no
      *         information is available, return NULL.
      *
-     *     allocationLocation(SourceLocation *sourceLocation)
+     *     allocationLocation(SourceLocation *sourceLocation) const;
      *         If available, return the source location at which this object
      *         was allocated. Sometimes the JavaScript engine saves this data-
      *         for object and array literals, perhaps.
      *
-     *     allocationCallStack(CallStack *callStack)
+     *     allocationCallStack(CallStack *callStack) const;
      *         If available, fill |*callStack| with the source location
      *         (either in JS or C++) at which this Node's referent was
      *         allocated. (If Firefox was built with refcount tracing, then I
@@ -245,7 +279,9 @@ class UniformNode {
      *         functions inlined.
      *
      * Individual specializations may provide additional members appropriate
-     * to their variant.
+     * to their variant. For example, some variants may have space to stash a
+     * mark bit; using that where available, and HashSet<UniformNode> when not
+     * could save memory when doing full graph traversal.
      */
     template<typename T> class Variant {
         T *ptr;
