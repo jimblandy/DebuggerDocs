@@ -134,6 +134,7 @@ class UniformNode {
     bool operator!=(const UniformNode &rhs) const { return tagged != rhs.tagged; }
     Kind kind() const { return reinterpret_cast<Kind>(tagged & ((1 << kind_bits) - 1)); }
 
+    /* Hash policy, suitable for use with js::HashMap and js::HashSet. */
     struct Hasher {
         typedef UniformNode Lookup;
         static js::HashNumber hash(const Lookup &l) { return l.tagged; }
@@ -356,6 +357,14 @@ class UniformNode {
 };
 
 #undef UNIFORMNODE_KINDS
+
+/*
+ * Establish UniformNode::Hasher as the default hash policy for UniformNode
+ * values used as keys in js::HashMap and js::HashSet objects.
+ */
+namespace js {
+template <> struct DefaultHasher<UniformNode> : UniformNode::Hasher { };
+}  // namespace js
 
 }  // namespace mozilla
 
