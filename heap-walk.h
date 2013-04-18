@@ -174,8 +174,12 @@ class UniformNode {
      *     static const char *name;
      *         The name of the referent type, as a C string.
      *
+     *     bool visible() const;
+     *         True if this node is something that could be presented to
+     *         JavaScript developers in analyses.
+     *
      *     class EdgeRange
-     *         A class for iterating over t
+     *         A class for iterating over a node's outgoing edges.
      *
      * Individual specializations may provide additional members appropriate
      * to their variant.
@@ -240,7 +244,7 @@ class UniformNode {
      * possible kind of node, but what's more helpful is to provide
      * overloadings for some specific variants, and define a template member
      * function to handle generic cases, perhaps using UniformNode::Variant to
-     * access varian-specific information. For example:
+     * access variant-specific information. For example:
      *
      * class ClassOrTypeName {
      *     typedef const char *result;
@@ -253,10 +257,12 @@ class UniformNode {
      *     }
      * };
      *
-     * Here, NODE->case<ClassOrTypeName>() evaluates to a name for the type of
-     * thing NODE refers to, but returns the object class if NODE refers to a
-     * JSObject. The first overloading of operator() handles the JSObject
-     * case; the second overloading handles all the others.
+     * Here, NODE->match<ClassOrTypeName>() evaluates to a name for the type
+     * of thing NODE refers to, but returns the object class if NODE refers to
+     * a JSObject. The first overloading of operator() handles the JSObject
+     * case, and takes advantage of the specific type to call its getClass()
+     * member. The second overloading handles all the other variants, and uses
+     * UniformNode::Variant to pick out the right information for its variant.
      *
      * Note that this can be useful even if you only define a template<T>
      * which does everything it needs to using Variant<T>: each instantiation
