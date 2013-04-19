@@ -255,12 +255,15 @@ class UniformNode {
 #error "mozilla::UniformNode not implemented for target architecture"
 #endif
 
+    // Strawman definitions for source location and call stack types. Firefox
+    // has existing types that play these roles, and we should use them
+    // instead of defining something new.
     struct SourceLocation {
         const char *URL;
         int line, column;
     };
 
-    struct CallStack { // Should use some extant type for this. Or at least js::Vector.
+    struct CallStack {
         SourceLocation *frame;
         size_t frameCount;
     };
@@ -362,6 +365,11 @@ class UniformNode {
     //     // will have the appropriate EdgeRange's member functions inlined.
     //     class EdgeRange;
     //
+    //     // A class with the same interface as EdgeRange, but inheriting
+    //     // from UniformNode::EdgeRangeBase, and thus usable in code
+    //     // not specialized for any particular variant.
+    //     class DynamicEdgeRange;
+    //
     // Individual specializations may provide additional members appropriate
     // to their variant. For example, some variants may have space to stash a
     // mark bit; using that where available, and HashSet<UniformNode> when not
@@ -377,6 +385,15 @@ class UniformNode {
         Variant(const UniformNode &node) : ptr(node.as<T>()) { }
         T *get() { return ptr; }
         class EdgeRange;
+        class DynamicEdgeRange: public EdgeRangeBase {
+            EdgeRange concrete;
+          public:
+            DynamicEdgeRange(T *node): concrete(node) { }
+            bool empty() const                  { return concrete.empty(); }
+            char *frontName() const             { return concrete.frontName(); }
+            UniformNode frontReferent() const   { return concrete.frontReferent(); }
+            bool frontVisible() const           { return concrete.frontVisible(); }
+        };
     };
 
     // A strictly-typed 'switch' that supports default cases.
@@ -425,6 +442,31 @@ class UniformNode {
 #undef UNIFORMNODE_MATCH_CASE
           default: abort();
         }
+    }
+
+    // A EdgeRange abstract base class, supporting the same interface as the
+    // variant-specific EdgeRange classes, except that the member functions
+    // are virtual. Each Variant<T>::EdgeRange::Dynamic class inherits from
+    // this base class.
+    class EdgeRangeBase {
+      public:
+        virtual bool empty() const = 0;
+        virtual char *frontName() const = 0;
+        virtual UniformNode frontReferent() const = 0;
+        virtual bool frontVisible() const = 0;
+    };
+
+    // Return an EdgeRangeBase implementation appropriate for this node's
+    // referent.
+    EdgeRangeBase *dynamicEdgeRange() {
+        class MakeEdgeRange {
+            typedef EdgeRangeBase *result;
+            template<typename T>
+            EdgeRangeBase *operator()(T *ptr) {
+                return new UniformNode::Variant<T>::DynamicEdgeRange(ptr);
+            }
+        }
+        return match(MakeEdgeRange());
     }
 };
 
