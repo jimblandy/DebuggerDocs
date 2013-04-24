@@ -52,15 +52,36 @@ where <i>actor</i> is the name of the non-existent actor. (It is strange to rece
 
 Clients should silently ignore packet properties they do not recognize. We expect that, as the protocol evolves, we will specify new properties that can appear in existing packets, and experimental implementations will do the same.
 
-== Requests and Replies ==
+== Common Patterns of Actor Communication ==
 
-In this protocol description, a <b>request</b> is a packet sent from the client which always elicits a single packet from the recipient, the <b>reply</b>. These terms indicate a simple pattern of communication: at any given time, either the client or actor is permitted to send a packet to the other, but never both.
+Each type of actor specifies which packets it can receive, which it might send, and when it can do each. Although in principle these interaction rules could be complex, in practice most actors follow one of two simple patterns:
 
-The client's communication with each actor is treated separately: the client may send a request to one actor, and then send a request to a different actor before receiving a reply from the first.
+<ul>
+<li><b>Request/Reply</b>: Each packet sent to the actor ("request") elicits a single packet in response ("reply").
+<li><b>Request/Reply/Notify</b>: Like Request/Reply, but the actor may send packets that are not in response to any specific request ("notification"), perhaps announcing events that occur spontaneously in the debuggee.
+</ul>
 
-Packets not described as requests or replies are part of some more complicated interaction, which should be spelled out in more detail.
+These patterns are described in more detail below.
 
-Any actor can reply to a request it is unable to carry out with an <b>error reply</b> of the form:
+Some actors require more complicated rules. For example, the set of packets accepted by a [[#Interacting_with_Thread-Like_Actors|Thread-like actor]] depends on which one of four states it occupies. The actor may spontaneously transition from one state to another, and not all state transitions produce notification packets. Actors like this require careful specification.
+
+=== The Request/Reply Pattern ===
+
+In this specification, if we call a packet a <b>request</b>, then it is a packet sent by the client, which always elicits a single packet from the actor in return, the <b>reply</b>. These terms indicate a simple pattern of communication: the actor processes packets in the order they are received, and the client can trust that the <i>i</i>'th reply corresponds to the <i>i</i>'th request.
+
+An [[#Error_Packets|error reply]] packet from a request/reply actor constitutes a reply.
+
+Note that it is correct for a client to send several requests to a request/reply actor without waiting for a reply to each request before sending the next; requests can be pipelined. However, as the pending requests consume memory, the client should ensure that only a bounded number of requests are outstanding at any one time.
+
+=== The Request/Reply/Notify Pattern ===
+
+Some actors follow the request/reply pattern, but may also send the client <b>notification</b> packets, not in reply to any particular request. For example, if the client sends the root actor a [[#Listing_Browser_Tabs|<code>"listTabs"</code>]] request, then the root actor sends a reply. However, since the client has now expressed an interest in the list of open tabs, the root actor may subsequently send the client a <code>"tabListChanged"</code> notification packet, indicating that the client should re-fetch the list of tabs if it is interested in the latest state.
+
+There should be a small upper bound on the number of notification packets any actor may send between packets received from the client, to ensure that the actor does not flood the client. In the example above, the root actor sends at most one <code>"tabListChanged"</code> notification after each <code>"listTabs"</code> request.
+
+=== Error Packets ===
+
+Any actor can reply to a packet it is unable to process with an <b>error reply</b> of the form:
 
   { "from":<i>actor</i>, "error":<i>name</i>, "message":<i>message</i> }
 
@@ -483,7 +504,7 @@ If the client was not already attached to <i>tabActor</i>, <i>tabActor</i> sends
 
   { "from":<i>tabActor</i>, "error":"wrongState" }
 
-While the client is attached, <i>tabActor</i> sends unsolicited notifications to the client whenever the user navigates the tab to a new page. When navigation begins, <i>tabActor</i> sends a packet of the form:
+While the client is attached, <i>tabActor</i> sends notifications to the client whenever the user navigates the tab to a new page. When navigation begins, <i>tabActor</i> sends a packet of the form:
 
   { "from":<i>tabActor</i>, "type":"tabNavigated", "state":"start",
     "url":<i>newURL</i> }
@@ -493,9 +514,9 @@ This indicates that the tab has begun navigating to <i>newURL</i>; JavaScript ex
   { "from":<i>tabActor</i>, "type":"tabNavigated", "state":"stop",
      "url":<i>newURL</i>, "title":<i>newTitle</i> }
 
-where <i>newURL</i> and <i>newTitle</i> are the URL and title of the page the tab is now showing. The <i>tabThreadActor</i> given in the response to the original <code>"attach"</code> request is now debugging the new page's code.
+where <i>newURL</i> and <i>newTitle</i> are the URL and title of the page the tab is now showing. The <i>tabThreadActor</i> given in the response to the original <code>"attach"</code> packet is now debugging the new page's code.
 
-If the user closes a tab to which the client is attached, its <i>tabActor</i> sends an unsolicited packet of the form:
+If the user closes a tab to which the client is attached, its <i>tabActor</i> sends a notification packet of the form:
 
   { "from":<i>tabActor</i>, "type":"tabDetached" }
 
