@@ -1008,7 +1008,7 @@ A <code>Debugger.Source</code> instance inherits the following accessor properti
 <dd>If this source belongs to a DOM element because it is an event handler content attribute or an event handler IDL attribute, this is the name of that attribute. Otherwise, this is <code>undefined</code>.
 
 <dt>introductionScript
-<dd>If this source was passed to an <i>introduction call</i>, this is the <code>Debugger.Script</code> instance containing that call. Otherwise, this is <code>undefined</code>. (Taken together with the <code>evaluationOffset</code> property, one can determine the call's source and position within that source of the call.)
+<dd>If this source was passed to an <i>introduction call</i> in debuggee code, this is the <code>Debugger.Script</code> instance containing that call. Otherwise, this is <code>undefined</code>. (Taken together with the <code>evaluationOffset</code> property, one can determine the call's source and position within that source of the call.)
 
 An introduction call is a function call (or assignment to a setter property) that introduces new JavaScript code to the system. This is one of the following:
 <ul>
@@ -1018,8 +1018,19 @@ An introduction call is a function call (or assignment to a setter property) tha
 <li>An assignment to an event handler IDL attribute of a DOM element.
 </ul>
 
+<dt>introductionKind
+<dd>A string indicating what kind of introduction call introduced this <code>Debugger.Source</code>'s code into the system. This is <code>undefined</code> if <code>introductionScript</code> is undefined; otherwise, it is one of the following strings:
+<ul>
+<li><code>"eval"</code>
+<li><code>"Function"</code>
+<li><code>"Worker"</code>
+<li><code>"importScripts"</code>
+<li><code>"handler"</code> (for DOM elements' event handler IDL attributes)
+</ul>
+
 <dt>evaluationOffset
 <dd>If <code>introductionScript</code> is a script, this is the offset within that script of the introduction call.
+
 </dl>
 
 === Function Properties of the Debugger.Source Prototype Object ===
