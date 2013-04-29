@@ -962,11 +962,11 @@ Note that, like <code>eval</code>, declarations in the <i>code</i> passed to <co
 
 == Debugger.Source ==
 
-A <code>Debugger.Source</code> instance represents a piece of JavaScript source code: it properties specify the source code itself as a string, and where that source originated. A <code>Debugger.Script</code> instance refers to the <code>Debugger.Source</code> instance for the source code from which it was produced.
+A <code>Debugger.Source</code> instance represents a piece of JavaScript source code: its properties provide the source code itself as a string, and describe where it came from. Each <code>Debugger.Script</code> instance refers to the <code>Debugger.Source</code> instance holding the source code from which it was produced.
 
-If a single piece of source code contains both top-level code and function definitions, or nested functions, then the <code>Debugger.Script</code> instances for those pieces of code all refer to the same <code>Debugger.Source<code> instance. Each script indicates the substring of the overall source to which it corresponds.
+If a single piece of source code contains both top-level code and function definitions, perhaps with nested functions, then the <code>Debugger.Script</code> instances for those all refer to the same <code>Debugger.Source<code> instance. Each script indicates the substring of the overall source to which it corresponds.
 
-A <code>Debugger.Source</code> instance may represent only a portion of a larger source document. For example, an HTML document can contain JavaScript in <code>&lt;script&gt;</code> elements and event handler content attributes. In this case, there may be either a single <code>Debugger.Source</code> instance for the entire HTML document, with each <code>Debugger.Script</code> referring to its substring of the document; or there may be a separate <code>Debugger.Source</code> instance for each <code>&lt;script&gt;</code> element and attribute.
+A <code>Debugger.Source</code> instance may represent only a portion of a larger source document. For example, an HTML document can contain JavaScript in multiple <code>&lt;script&gt;</code> elements and event handler content attributes. In this case, there may be either a single <code>Debugger.Source</code> instance for the entire HTML document, with each <code>Debugger.Script</code> referring to its substring of the document; or there may be a separate <code>Debugger.Source</code> instance for each <code>&lt;script&gt;</code> element and attribute. The choice is left up to the implementation.
 
 If a given piece of source code is presented to the JavaScript implementation more than once, with the same origin metadata, the JavaScript implementation may generate a fresh <code>Debugger.Source</code> instance to represent each presentation, or it may use a single <code>Debugger.Source</code> instance to represent them all.
 
@@ -996,6 +996,8 @@ A <code>Debugger.Source</code> instance inherits the following accessor properti
 <li>The URL may be the name of a XPCOM JavaScript module or subscript.
 </ul>
 
+(Note that code passed to <code>eval</code>, the <code>Function</code> constructor, or a similar function is <i>not</i> considered to be loaded from a URL; the <code>url</code> accessor on <code>Debugger.Source</code> instances for such sources should return <code>undefined</code>.)
+
 <dt>element
 <dd>The DOM element to which this source code belongs, if any, or <code>undefined</code> if it belongs to no DOM element. Source belongs to a DOM element in the following cases:
 <ul>
@@ -1003,6 +1005,8 @@ A <code>Debugger.Source</code> instance inherits the following accessor properti
 <li>Source belongs to a DOM element if it is an event handler content attribute (that is, if it is written out in the markup text as an attribute value).
 <li>Source belongs to a DOM element if it was assigned to one of the element's event handler IDL attributes as a string. (Note that one may assign both strings and functions to DOM elements' event handler IDL attributes. If one assigns a function, that function's script's source does <i>not</i> belong to the DOM element; the function's definition must appear elsewhere.)
 </ul>
+
+(If the sources attached to a DOM element change, the <code>Debugger.Source</code> instances representing superceded code still refer to the DOM element; this accessor only reflects origins, not current relationships.)
 
 <dt>elementProperty
 <dd>If this source belongs to a DOM element because it is an event handler content attribute or an event handler IDL attribute, this is the name of that attribute. Otherwise, this is <code>undefined</code>.
@@ -1018,6 +1022,9 @@ An introduction call is a function call (or assignment to a setter property) tha
 <li>An assignment to an event handler IDL attribute of a DOM element.
 </ul>
 
+<dt>introductionScriptOffset
+<dd>If <code>introductionScript</code> is a script, this is the offset within that script of the introduction call.
+
 <dt>introductionKind
 <dd>A string indicating what kind of introduction call introduced this <code>Debugger.Source</code>'s code into the system. This is <code>undefined</code> if <code>introductionScript</code> is undefined; otherwise, it is one of the following strings:
 <ul>
@@ -1027,9 +1034,6 @@ An introduction call is a function call (or assignment to a setter property) tha
 <li><code>"importScripts"</code>
 <li><code>"handler"</code> (for DOM elements' event handler IDL attributes)
 </ul>
-
-<dt>introductionScriptOffset
-<dd>If <code>introductionScript</code> is a script, this is the offset within that script of the introduction call.
 
 </dl>
 
