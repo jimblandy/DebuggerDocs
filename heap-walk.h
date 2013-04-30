@@ -105,19 +105,20 @@
 // UniformNode has a serious limitation: it is not meant for use while the
 // heap is being changed by other code. Requiring UniformNode instances to be
 // registered with the collector, to allow a moving collector to update them,
-// would make them infeasibly expensive. (Imagine presenting the collector
+// would make them much more expensive. (Imagine presenting the collector
 // with a large HashMap using UniformNodes as keys.) Assuming that the heap
 // does not change also greatly simplifies both UniformNode's own
 // implementation, and those of the algorithms that use it.
 //
 // Instead, analyses should use UniformNode to make a snapshot of the heap
-// (either in memory or serialized), or to run the full algorithm, while other
-// uses of the heap are suspended. Assuming nodes are not used by multiple
-// threads, it should be sufficient to avoid running JavaScript in the
-// JSRuntime being analyzed; avoid actively using XPCOM objects; and avoid
-// returning to the event loop. (This means showing progress meters will be a
-// challenge, if it's possible to do so at all; offering up-front estimates
-// based on overall heap size may be an acceptable alternative.)
+// (either in memory or serialized), or to run the full algorithm, while
+// other uses of the heap are suspended. Assuming nodes are not used by
+// multiple threads, it should be sufficient to avoid running JavaScript in
+// the JSRuntime being analyzed; avoid actively using XPCOM objects; and
+// avoid returning to the event loop. (This means showing progress meters
+// will be a challenge, if it's possible to do so at all; offering up-front
+// time estimates based on overall heap size may be an acceptable
+// alternative, or forking and doing the analysis on the child process.)
 //
 // (The threading question is interesting, and we need to think that through
 // carefully. If I understand correctly, JavaScript objects are never shared
@@ -165,13 +166,13 @@ class UniformNode {
 #undef UNIFORMNODE_DECL_KIND
     };
 
-#ifdef __x86_64__
   private:
     // This contains both the pointer, right-shifted by kind_bits, and the
     // kind, in the low bits. On x86_64, the top sixteen bits of a pointer
     // are always the sign-extension of the rest of the pointer, so an
     // arithmetic right-then-left shift preserves the pointer's value.
-    intptr_t tagged;
+    // Perhaps a tighter representation could be found on 32-bit machines.
+    int64_t tagged;
 
     // How many bits at the low end of 'tagged' are reserved to hold
     // this node's kind?
@@ -258,9 +259,6 @@ class UniformNode {
   public:
     Serialized serialize() const { return tagged; }
     static UniformNode deserialize(Serialized s) { return UniformNode(s); }
-#else
-#error "mozilla::UniformNode not implemented for target architecture"
-#endif
 
     // Strawman definitions for source location and call stack types. Firefox
     // has existing types that play these roles, and we should use them
@@ -460,8 +458,11 @@ class UniformNode {
 #undef UNIFORMNODE_FOR_EACH_KIND
 
 // Base class for variant classes.
-template<typename Referent>
+template<typename R>
 class UniformNode::VariantBase {
+  public:
+    typedef R Referent;
+  private:
     Referent *ptr;
   public:
     VariantBase(Referent *ptr) : ptr(ptr) { }
@@ -505,7 +506,6 @@ class UniformNode::DynamicEdgeRange : public EdgeRangeBase {
 template<>
 class UniformNode::Variant<js::RootInfo> : public UniformNode::VariantBase<js::RootInfo> {
   public:
-    typedef js::RootInfo Referent;
     static const Kind kind = kindRootInfo;
     static const char *kindName;
     class EdgeRange;
@@ -515,7 +515,6 @@ class UniformNode::Variant<js::RootInfo> : public UniformNode::VariantBase<js::R
 template<>
 class UniformNode::Variant<JSObject> : public UniformNode::VariantBase<JSObject> {
   public:
-    typedef JSObject Referent;
     static const Kind kind = kindObject;
     static const char *kindName;
     class EdgeRange;
@@ -525,7 +524,6 @@ class UniformNode::Variant<JSObject> : public UniformNode::VariantBase<JSObject>
 template<>
 class UniformNode::Variant<JSString> : public UniformNode::VariantBase<JSString> {
   public:
-    typedef JSString Referent;
     static const Kind kind = kindString;
     static const char kindName;
     class EdgeRange;
@@ -535,7 +533,6 @@ class UniformNode::Variant<JSString> : public UniformNode::VariantBase<JSString>
 template<>
 class UniformNode::Variant<JSScript> : public UniformNode::VariantBase<JSScript> {
   public:
-    typedef JSScript Referent;
     static const Kind kind = kindScript;
     static const char kindName;
     class EdgeRange;
@@ -545,7 +542,6 @@ class UniformNode::Variant<JSScript> : public UniformNode::VariantBase<JSScript>
 template<>
 class UniformNode::Variant<js::ion::IonCode> : public UniformNode::VariantBase<js::ion::IonCode> {
   public:
-    typedef js::ion::IonCode Referent;
     static const Kind kind = kindIonCode;
     static const char kindName;
     class EdgeRange;
@@ -555,7 +551,6 @@ class UniformNode::Variant<js::ion::IonCode> : public UniformNode::VariantBase<j
 template<>
 class UniformNode::Variant<js::Shape> : public UniformNode::VariantBase<js::Shape> {
   public:
-    typedef js::Shape Referent;
     static const Kind kind = kindShape;
     static const char kindName;
     class EdgeRange;
@@ -565,7 +560,6 @@ class UniformNode::Variant<js::Shape> : public UniformNode::VariantBase<js::Shap
 template<>
 class UniformNode::Variant<js::BaseShape> : public UniformNode::VariantBase<js::BaseShape> {
   public:
-    typedef js::BaseShape Referent;
     static const Kind kind = kindBaseShape;
     static const char kindName;
     class EdgeRange;
