@@ -254,7 +254,7 @@ class UniformNode {
     // hashes equal to N.
     typedef intptr_t Serialized;
   private:
-    UniformNode(Serialized s) : tagged(s) { }
+    explicit UniformNode(Serialized s) : tagged(s) { }
   public:
     Serialized serialize() const { return tagged; }
     static UniformNode deserialize(Serialized s) { return UniformNode(s); }
@@ -450,7 +450,11 @@ class UniformNode {
 
     // Return an EdgeRangeBase implementation appropriate for this node's
     // referent.
-    EdgeRangeBase *dynamicEdgeRange(); // { return match(MakeEdgeRange()); }
+    EdgeRangeBase *dynamicEdgeRange();
+    // Definition commented out, because it requires full definitions of
+    // all variants and their EdgeRange types. But here's the full
+    // definition:
+    // { return match(MakeEdgeRange()); }
 };
 
 #undef UNIFORMNODE_FOR_EACH_KIND
@@ -462,7 +466,8 @@ class UniformNode::VariantBase {
   public:
     VariantBase(Referent *ptr) : ptr(ptr) { }
     VariantBase(const UniformNode &node) : ptr(node.as<Referent>()) { }
-    Referent *get() { return ptr; }
+    operator UniformNode() const { return UniformNode(ptr); }
+    Referent *get() const { return ptr; }
 };
 
 // An EdgeRange abstract base class, supporting the same interface as the
@@ -482,7 +487,7 @@ template<typename Referent, typename EdgeRange>
 class UniformNode::DynamicEdgeRange : public EdgeRangeBase {
     EdgeRange concrete;
   public:
-    DynamicEdgeRange(Referent *node): concrete(node) { }
+    explicit DynamicEdgeRange(Referent *node): concrete(node) { }
     bool empty() const                  { return concrete.empty(); }
     char *frontName() const             { return concrete.frontName(); }
     UniformNode frontReferent() const   { return concrete.frontReferent(); }
