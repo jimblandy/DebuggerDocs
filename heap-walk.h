@@ -370,9 +370,13 @@ class UniformNode {
     //     // will have the appropriate EdgeRange's member functions inlined.
     //     class EdgeRange;
     //
-    //     // A class with the same interface as EdgeRange, but inheriting
-    //     // from UniformNode::EdgeRangeBase, and thus usable in code
-    //     // not specialized for any particular variant.
+    //     // A class with almost the same interface as EdgeRange, but
+    //     // inheriting from UniformNode::DynamicEdgeRange, and thus
+    //     // usable in code not specialized for any particular variant.
+    //     // (The name is reused, perhaps confusingly, perhaps helpfully:
+    //     // UniformNode::DynamicEdgeRange is the abstract base class;
+    //     // UniformNode::Variant<T>::DynamicEdgeRange is the derived
+    //     // class for references to T's.)
     //     class DynamicEdgeRange;
     //
     // Individual specializations may provide additional members appropriate
@@ -382,10 +386,10 @@ class UniformNode {
     //
     // C++ requires that the actual specializations be declared outside the class.
     template<typename Referent> class Variant;
-    template<typename Referent> class VariantBase;
+    template<typename Referent> class VariantCommon;
 
-    class EdgeRangeBase;
-    template<typename Referent, typename EdgeRange> class DynamicEdgeRange;
+    class DynamicEdgeRange;
+    template<typename Referent, typename EdgeRange> class DynamicEdgeRangeTemplate;
 
     // A strictly-typed 'switch' that supports default cases.
     //
@@ -439,16 +443,16 @@ class UniformNode {
     // class would be local to dynamicEdgeRange, but local classes can't
     // have member templates.)
     struct MakeEdgeRange {
-        typedef EdgeRangeBase *result;
+        typedef DynamicEdgeRange *result;
         template<typename T>
-        EdgeRangeBase *operator()(T *ptr) const {
+        DynamicEdgeRange *operator()(T *ptr) const {
             return new typename UniformNode::Variant<T>::DynamicEdgeRange(ptr);
         }
     };
 
-    // Return an EdgeRangeBase implementation appropriate for this node's
+    // Return a DynamicEdgeRange implementation appropriate for this node's
     // referent.
-    EdgeRangeBase *dynamicEdgeRange();
+    DynamicEdgeRange *dynamicEdgeRange();
     // Definition commented out, because it requires full definitions of
     // all variants and their EdgeRange types. But here's the full
     // definition:
@@ -457,16 +461,16 @@ class UniformNode {
 
 #undef UNIFORMNODE_FOR_EACH_KIND
 
-// Base class for variant classes.
+// Template capturing common structure for Variant specializations.
 template<typename R>
-class UniformNode::VariantBase {
+class UniformNode::VariantCommon {
   public:
     typedef R Referent;
   private:
     Referent *ptr;
   public:
-    VariantBase(Referent *ptr) : ptr(ptr) { }
-    VariantBase(const UniformNode &node) : ptr(node.as<Referent>()) { }
+    VariantCommon(Referent *ptr) : ptr(ptr) { }
+    VariantCommon(const UniformNode &node) : ptr(node.as<Referent>()) { }
     operator UniformNode() const { return UniformNode(ptr); }
     Referent *get() const { return ptr; }
 };
@@ -475,7 +479,7 @@ class UniformNode::VariantBase {
 // variant-specific EdgeRange classes, except that the member functions are
 // virtual. Each Variant<T>::DynamicEdgeRange class inherits from this base
 // class.
-class UniformNode::EdgeRangeBase {
+class UniformNode::DynamicEdgeRange {
   public:
     virtual bool empty() const = 0;
     virtual char *frontName() const = 0;
@@ -483,12 +487,12 @@ class UniformNode::EdgeRangeBase {
     virtual bool frontVisible() const = 0;
 };
 
-// Template for DynamicEdgeRange implementations.
+// Template for specialized DynamicEdgeRange implementations.
 template<typename Referent, typename EdgeRange>
-class UniformNode::DynamicEdgeRange : public EdgeRangeBase {
+class UniformNode::DynamicEdgeRangeTemplate : public DynamicEdgeRange {
     EdgeRange concrete;
   public:
-    explicit DynamicEdgeRange(Referent *node): concrete(node) { }
+    explicit DynamicEdgeRangeTemplate(Referent *node): concrete(node) { }
     bool empty() const                  { return concrete.empty(); }
     char *frontName() const             { return concrete.frontName(); }
     UniformNode frontReferent() const   { return concrete.frontReferent(); }
@@ -504,66 +508,66 @@ class UniformNode::DynamicEdgeRange : public EdgeRangeBase {
 // types, and so on.
 
 template<>
-class UniformNode::Variant<js::RootInfo> : public UniformNode::VariantBase<js::RootInfo> {
+class UniformNode::Variant<js::RootInfo> : public UniformNode::VariantCommon<js::RootInfo> {
   public:
     static const Kind kind = kindRootInfo;
     static const char *kindName;
     class EdgeRange;
-    typedef UniformNode::DynamicEdgeRange<Referent, EdgeRange> DynamicEdgeRange;
+    typedef UniformNode::DynamicEdgeRangeTemplate<Referent, EdgeRange> DynamicEdgeRange;
 };
 
 template<>
-class UniformNode::Variant<JSObject> : public UniformNode::VariantBase<JSObject> {
+class UniformNode::Variant<JSObject> : public UniformNode::VariantCommon<JSObject> {
   public:
     static const Kind kind = kindObject;
     static const char *kindName;
     class EdgeRange;
-    typedef UniformNode::DynamicEdgeRange<Referent, EdgeRange> DynamicEdgeRange;
+    typedef UniformNode::DynamicEdgeRangeTemplate<Referent, EdgeRange> DynamicEdgeRange;
 };
 
 template<>
-class UniformNode::Variant<JSString> : public UniformNode::VariantBase<JSString> {
+class UniformNode::Variant<JSString> : public UniformNode::VariantCommon<JSString> {
   public:
     static const Kind kind = kindString;
     static const char kindName;
     class EdgeRange;
-    typedef UniformNode::DynamicEdgeRange<Referent, EdgeRange> DynamicEdgeRange;
+    typedef UniformNode::DynamicEdgeRangeTemplate<Referent, EdgeRange> DynamicEdgeRange;
 };
 
 template<>
-class UniformNode::Variant<JSScript> : public UniformNode::VariantBase<JSScript> {
+class UniformNode::Variant<JSScript> : public UniformNode::VariantCommon<JSScript> {
   public:
     static const Kind kind = kindScript;
     static const char kindName;
     class EdgeRange;
-    typedef UniformNode::DynamicEdgeRange<Referent, EdgeRange> DynamicEdgeRange;
+    typedef UniformNode::DynamicEdgeRangeTemplate<Referent, EdgeRange> DynamicEdgeRange;
 };
 
 template<>
-class UniformNode::Variant<js::ion::IonCode> : public UniformNode::VariantBase<js::ion::IonCode> {
+class UniformNode::Variant<js::ion::IonCode> : public UniformNode::VariantCommon<js::ion::IonCode> {
   public:
     static const Kind kind = kindIonCode;
     static const char kindName;
     class EdgeRange;
-    typedef UniformNode::DynamicEdgeRange<Referent, EdgeRange> DynamicEdgeRange;
+    typedef UniformNode::DynamicEdgeRangeTemplate<Referent, EdgeRange> DynamicEdgeRange;
 };
 
 template<>
-class UniformNode::Variant<js::Shape> : public UniformNode::VariantBase<js::Shape> {
+class UniformNode::Variant<js::Shape> : public UniformNode::VariantCommon<js::Shape> {
   public:
     static const Kind kind = kindShape;
     static const char kindName;
     class EdgeRange;
-    typedef UniformNode::DynamicEdgeRange<Referent, EdgeRange> DynamicEdgeRange;
+    typedef UniformNode::DynamicEdgeRangeTemplate<Referent, EdgeRange> DynamicEdgeRange;
 };
 
 template<>
-class UniformNode::Variant<js::BaseShape> : public UniformNode::VariantBase<js::BaseShape> {
+class UniformNode::Variant<js::BaseShape> : public UniformNode::VariantCommon<js::BaseShape> {
   public:
     static const Kind kind = kindBaseShape;
     static const char kindName;
     class EdgeRange;
-    typedef UniformNode::DynamicEdgeRange<Referent, EdgeRange> DynamicEdgeRange;
+    typedef UniformNode::DynamicEdgeRangeTemplate<Referent, EdgeRange> DynamicEdgeRange;
 };
 
 }  // namespace mozilla
