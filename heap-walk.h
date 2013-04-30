@@ -6,7 +6,12 @@
 #ifndef mozilla_tools_HeapWalk_h
 #define mozilla_tools_HeapWalk_h
 
+#define __STDC_LIMIT_MACROS
+
+#include <assert.h>
 #include <stdint.h>
+
+#include <js/HashTable.h>
 
 // This is a draft header for an interface not yet implemented. You can fork
 // this specification on GitHub to draft and discuss revisions:
@@ -126,12 +131,14 @@
 // UniformNode should suffice. I don't know if / when XPCOM objects are shared
 // between threads, but I suspect that will be all right in practice, too.)
 
-namespace js {
 struct JSObject;
 struct JSString;
 struct JSScript;
+
+namespace js {
 struct RootInfo;
 class Shape;
+class BaseShape;
 namespace ion {
 class IonCode;
 }
@@ -139,14 +146,14 @@ class IonCode;
 
 namespace mozilla {
 
-#define UNIFORMNODE_FOR_EACH_KIND(f)    \
-    f(Root,      RootInfo)              \
-    f(Object,    JSObject)              \
-    f(String,    JSString)              \
-    f(Script,    JSScript)              \
-    f(Ioncode,   js::ion::IonCode)      \
-    f(Shape,     js::Shape)             \
-    f(BaseShape, js::BaseShape)         \
+#define UNIFORMNODE_FOR_EACH_KIND(f)                                          \
+    f(RootInfo,  js::RootInfo)                                                \
+    f(Object,    JSObject)                                                    \
+    f(String,    JSString)                                                    \
+    f(Script,    JSScript)                                                    \
+    f(IonCode,   js::ion::IonCode)                                            \
+    f(Shape,     js::Shape)                                                   \
+    f(BaseShape, js::BaseShape)                                               \
     // end
 
 class UniformNode {
@@ -158,7 +165,7 @@ class UniformNode {
 #undef UNIFORMNODE_DECL_KIND
     };
 
-#ifdef JS_BYTES_PER_WORD == 8
+#ifdef __x86_64__
   private:
     // This contains both the pointer, right-shifted by kind_bits, and the
     // kind, in the low bits. On x86_64, the top sixteen bits of a pointer
@@ -172,13 +179,13 @@ class UniformNode {
 
     // Untyped constructor function. The public constructors are typed, and
     // set the node's kind appropriately.
-    void init(void *pointer, Kind kind) {
+    void init(const void *pointer, Kind kind) {
         assert(0 <= kind && kind < kindCount);
         assert(kindCount <= 1 << kind_bits);
         intptr_t address = reinterpret_cast<intptr_t>(pointer);
-        tagged = (address << kind_bits) | reinterpret_cast<intptr_t>(kind);
-        assert(this.pointer() == pointer);
-        assert(this.kind() == kind);
+        tagged = (address << kind_bits) | static_cast<intptr_t>(kind);
+        assert(this->pointer() == pointer);
+        assert(this->kind() == kind);
     }
 
     // Untyped address function. The public 'as' and 'asOrNull' member
@@ -213,17 +220,17 @@ class UniformNode {
     };
 
     // Return the kind of node this UniformNode represents.
-    Kind kind() const { return reinterpret_cast<Kind>(tagged & ((1 << kind_bits) - 1)); }
+    Kind kind() const { return static_cast<Kind>(tagged & ((1 << kind_bits) - 1)); }
 
     // is<T>() is true if this UniformNode points to a T, false otherwise.
     template<typename T>
-    bool is() const { return kind() == Traits<T>.kind; }
+    bool is() const { return kind() == Variant<T>::kind; }
 
     // as<T>() returns a T * if this UniformNode points to a T, or asserts
     // otherwise.
     template<typename T>
     T *as() const {
-        assert(kind() == Traits<T>.kind);
+        assert(kind() == Variant<T>::kind);
         return reinterpret_cast<T *>(pointer());
     }
 
@@ -231,7 +238,7 @@ class UniformNode {
     // returns NULL otherwise.
     template<typename T>
     T *asOrNull() const {
-        if (kind () == Traits<T>.kind)
+        if (kind () == Variant<T>::kind)
             return as<T>();
         else
             return NULL;
@@ -277,7 +284,7 @@ class UniformNode {
     // following members:
     //
     //     // T, just for convenience.
-    //     typedef T referent;
+    //     typedef T Referent;
     //
     //     // The Kind value used for UniformNodes referring to T.
     //     static const Kind kind;
@@ -376,25 +383,11 @@ class UniformNode {
     // could save memory when doing full graph traversal.
     //
     // C++ requires that the actual specializations be declared outside the class.
-    template<typename T>
-    class Variant {
-        T *ptr;
-      public:
-        typedef T referent;
-        Variant(T *ptr) : ptr(ptr) { }
-        Variant(const UniformNode &node) : ptr(node.as<T>()) { }
-        T *get() { return ptr; }
-        class EdgeRange;
-        class DynamicEdgeRange: public EdgeRangeBase {
-            EdgeRange concrete;
-          public:
-            DynamicEdgeRange(T *node): concrete(node) { }
-            bool empty() const                  { return concrete.empty(); }
-            char *frontName() const             { return concrete.frontName(); }
-            UniformNode frontReferent() const   { return concrete.frontReferent(); }
-            bool frontVisible() const           { return concrete.frontVisible(); }
-        };
-    };
+    template<typename Referent> class Variant;
+    template<typename Referent> class VariantBase;
+
+    class EdgeRangeBase;
+    template<typename Referent, typename EdgeRange> class DynamicEdgeRange;
 
     // A strictly-typed 'switch' that supports default cases.
     //
@@ -444,78 +437,142 @@ class UniformNode {
         }
     }
 
-    // A EdgeRange abstract base class, supporting the same interface as the
-    // variant-specific EdgeRange classes, except that the member functions
-    // are virtual. Each Variant<T>::EdgeRange::Dynamic class inherits from
-    // this base class.
-    class EdgeRangeBase {
-      public:
-        virtual bool empty() const = 0;
-        virtual char *frontName() const = 0;
-        virtual UniformNode frontReferent() const = 0;
-        virtual bool frontVisible() const = 0;
+    // UniformNode::match case class for dynamicEdgeRange. (Ideally, this
+    // class would be local to dynamicEdgeRange, but local classes can't
+    // have member templates.)
+    struct MakeEdgeRange {
+        typedef EdgeRangeBase *result;
+        template<typename T>
+        EdgeRangeBase *operator()(T *ptr) const {
+            return new typename UniformNode::Variant<T>::DynamicEdgeRange(ptr);
+        }
     };
 
     // Return an EdgeRangeBase implementation appropriate for this node's
     // referent.
-    EdgeRangeBase *dynamicEdgeRange() {
-        class MakeEdgeRange {
-            typedef EdgeRangeBase *result;
-            template<typename T>
-            EdgeRangeBase *operator()(T *ptr) {
-                return new UniformNode::Variant<T>::DynamicEdgeRange(ptr);
-            }
-        }
-        return match(MakeEdgeRange());
-    }
+    EdgeRangeBase *dynamicEdgeRange(); // { return match(MakeEdgeRange()); }
 };
 
 #undef UNIFORMNODE_FOR_EACH_KIND
 
-// Specializations of UniformNode::Variant for each variant type that we support.
+// Base class for variant classes.
+template<typename Referent>
+class UniformNode::VariantBase {
+    Referent *ptr;
+  public:
+    VariantBase(Referent *ptr) : ptr(ptr) { }
+    VariantBase(const UniformNode &node) : ptr(node.as<Referent>()) { }
+    Referent *get() { return ptr; }
+};
+
+// An EdgeRange abstract base class, supporting the same interface as the
+// variant-specific EdgeRange classes, except that the member functions are
+// virtual. Each Variant<T>::DynamicEdgeRange class inherits from this base
+// class.
+class UniformNode::EdgeRangeBase {
+  public:
+    virtual bool empty() const = 0;
+    virtual char *frontName() const = 0;
+    virtual UniformNode frontReferent() const = 0;
+    virtual bool frontVisible() const = 0;
+};
+
+// Template for DynamicEdgeRange implementations.
+template<typename Referent, typename EdgeRange>
+class UniformNode::DynamicEdgeRange : public EdgeRangeBase {
+    EdgeRange concrete;
+  public:
+    DynamicEdgeRange(Referent *node): concrete(node) { }
+    bool empty() const                  { return concrete.empty(); }
+    char *frontName() const             { return concrete.frontName(); }
+    UniformNode frontReferent() const   { return concrete.frontReferent(); }
+    bool frontVisible() const           { return concrete.frontVisible(); }
+};
+
+// Specializations of UniformNode::Variant for each variant type that we
+// support.
+//
+// These could be placed in separate header files, but all of those would
+// need to be #included in compilation units which use UniformNode::match,
+// since that wants static information about each variant's members, member
+// types, and so on.
 
 template<>
-class UniformNode::Variant<JSObject> {
-    static const Kind kind = KindObject;
-    static const char *kindName = "JSObject";
+class UniformNode::Variant<js::RootInfo> : public UniformNode::VariantBase<js::RootInfo> {
+  public:
+    typedef js::RootInfo Referent;
+    static const Kind kind = kindRootInfo;
+    static const char *kindName;
+    class EdgeRange;
+    typedef UniformNode::DynamicEdgeRange<Referent, EdgeRange> DynamicEdgeRange;
 };
 
 template<>
-class UniformNode::Variant<JSString> {
-    static const Kind kind = KindString;
-    static const char kindName = "JSString";
+class UniformNode::Variant<JSObject> : public UniformNode::VariantBase<JSObject> {
+  public:
+    typedef JSObject Referent;
+    static const Kind kind = kindObject;
+    static const char *kindName;
+    class EdgeRange;
+    typedef UniformNode::DynamicEdgeRange<Referent, EdgeRange> DynamicEdgeRange;
 };
 
 template<>
-class UniformNode::Variant<JSScript> {
-    static const Kind kind = KindScript;
-    static const char kindName = "JSScript";
+class UniformNode::Variant<JSString> : public UniformNode::VariantBase<JSString> {
+  public:
+    typedef JSString Referent;
+    static const Kind kind = kindString;
+    static const char kindName;
+    class EdgeRange;
+    typedef UniformNode::DynamicEdgeRange<Referent, EdgeRange> DynamicEdgeRange;
 };
 
 template<>
-class UniformNode::Variant<js::ion::IonCode> {
-    static const Kind kind = KindIonCode;
-    static const char kindName = "js::ion::IonCode";
+class UniformNode::Variant<JSScript> : public UniformNode::VariantBase<JSScript> {
+  public:
+    typedef JSScript Referent;
+    static const Kind kind = kindScript;
+    static const char kindName;
+    class EdgeRange;
+    typedef UniformNode::DynamicEdgeRange<Referent, EdgeRange> DynamicEdgeRange;
 };
 
 template<>
-class UniformNode::Variant<js::Shape> {
-    static const Kind kind = KindShape;
-    static const char kindName = "js::Shape";
+class UniformNode::Variant<js::ion::IonCode> : public UniformNode::VariantBase<js::ion::IonCode> {
+  public:
+    typedef js::ion::IonCode Referent;
+    static const Kind kind = kindIonCode;
+    static const char kindName;
+    class EdgeRange;
+    typedef UniformNode::DynamicEdgeRange<Referent, EdgeRange> DynamicEdgeRange;
 };
 
 template<>
-class UniformNode::Variant<js::BaseShape> {
-    static const Kind kind = KindBaseShape;
-    static const char kindName = "js::BaseShape";
+class UniformNode::Variant<js::Shape> : public UniformNode::VariantBase<js::Shape> {
+  public:
+    typedef js::Shape Referent;
+    static const Kind kind = kindShape;
+    static const char kindName;
+    class EdgeRange;
+    typedef UniformNode::DynamicEdgeRange<Referent, EdgeRange> DynamicEdgeRange;
 };
+
+template<>
+class UniformNode::Variant<js::BaseShape> : public UniformNode::VariantBase<js::BaseShape> {
+  public:
+    typedef js::BaseShape Referent;
+    static const Kind kind = kindBaseShape;
+    static const char kindName;
+    class EdgeRange;
+    typedef UniformNode::DynamicEdgeRange<Referent, EdgeRange> DynamicEdgeRange;
+};
+
+}  // namespace mozilla
 
 // Establish UniformNode::Hasher as the default hash policy for UniformNode
 // values used as keys in js::HashMap and js::HashSet objects.
 namespace js {
-template<> struct DefaultHasher<UniformNode> : UniformNode::Hasher { };
+template<> struct DefaultHasher<mozilla::UniformNode> : mozilla::UniformNode::Hasher { };
 }  // namespace js
-
-}  // namespace mozilla
 
 #endif // mozilla_tools_HeapWalk_h
