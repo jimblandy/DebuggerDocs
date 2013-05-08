@@ -3,8 +3,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#ifndef mozilla_tools_HeapWalk_h
-#define mozilla_tools_HeapWalk_h
+#ifndef js_public_UniformNode_h__
+#define js_public_UniformNode_h__
 
 #define __STDC_LIMIT_MACROS
 
@@ -206,7 +206,7 @@ class UniformNode {
 
     // Copy constructor and assignment operator.
     UniformNode(const UniformNode &rhs) : tagged(rhs.tagged) { }
-    UniformNode &operator=(const UniformNode &rhs) { tagged = rhs.tagged; }
+    UniformNode &operator=(const UniformNode &rhs) { tagged = rhs.tagged; return *this; }
 
     // Equality, and a hash policy that respects it.
     bool operator==(const UniformNode &rhs) const { return tagged == rhs.tagged; }
@@ -339,6 +339,10 @@ class UniformNode {
     //     // after js::HashTable<K,V>::Range. Each Variant<T> has its own
     //     // EdgeRange class definition, but all EdgeRange classes support
     //     // the following interface:
+    //     //
+    //     //    // Construct an instance representing all the outgoing edges
+    //     //    // from |node|.
+    //     //    EdgeRange(const Referent *);
     //     //
     //     //    // True if there are no more edges in this range.
     //     //    bool empty() const;
@@ -578,4 +582,4 @@ namespace js {
 template<> struct DefaultHasher<mozilla::UniformNode> : mozilla::UniformNode::Hasher { };
 }  // namespace js
 
-#endif // mozilla_tools_HeapWalk_h
+#endif // js_public_UniformNode_h__
