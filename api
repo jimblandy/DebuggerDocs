@@ -979,7 +979,7 @@ A debugger may place its own properties on <code>Debugger.Source</code> instance
 A <code>Debugger.Source</code> instance inherits the following accessor properties from its prototype:
 
 <dl>
-<dt>source
+<dt>text
 <dd>The JavaScript source code, as a string. The value satisfies the <code>Program</code>, <code>FunctionDeclaration</code>, or <code>FunctionExpression</code> productions in the ECMAScript standard.
 
 <dt>enclosingStart
@@ -999,7 +999,7 @@ A <code>Debugger.Source</code> instance inherits the following accessor properti
 (Note that code passed to <code>eval</code>, the <code>Function</code> constructor, or a similar function is <i>not</i> considered to be loaded from a URL; the <code>url</code> accessor on <code>Debugger.Source</code> instances for such sources should return <code>undefined</code>.)
 
 <dt>element
-<dd>The DOM element to which this source code belongs, if any, or <code>undefined</code> if it belongs to no DOM element. Source belongs to a DOM element in the following cases:
+<dd>The <code>Debugger.Object</code> instance referring to the DOM element to which this source code belongs, if any, or <code>undefined</code> if it belongs to no DOM element. Source belongs to a DOM element in the following cases:
 <ul>
 <li>Source belongs to a <code>&lt;script&gt;</code> element if it is the element's text content (that is, it is written out as the body of the <code>&lt;script&gt;</code> element in the markup text), or is the source document referenced by its <code>src</code> attribute.
 <li>Source belongs to a DOM element if it is an event handler content attribute (that is, if it is written out in the markup text as an attribute value).
@@ -1009,10 +1009,10 @@ A <code>Debugger.Source</code> instance inherits the following accessor properti
 (If the sources attached to a DOM element change, the <code>Debugger.Source</code> instances representing superceded code still refer to the DOM element; this accessor only reflects origins, not current relationships.)
 
 <dt>elementProperty
-<dd>If this source belongs to a DOM element because it is an event handler content attribute or an event handler IDL attribute, this is the name of that attribute. Otherwise, this is <code>undefined</code>.
+<dd>If this source belongs to a DOM element because it is an event handler content attribute or an event handler IDL attribute, this is the name of that attribute, a string. Otherwise, this is <code>undefined</code>.
 
 <dt>introductionScript
-<dd>If this source was passed to an <i>introduction call</i> in debuggee code, this is the <code>Debugger.Script</code> instance containing that call. Otherwise, this is <code>undefined</code>. (Taken together with the <code>introductionScriptOffset</code> property, one can determine the call's source and position within that source of the call.)
+<dd>If this source was passed to an <i>introduction call</i> in debuggee code, this is the <code>Debugger.Script</code> instance referring to the script containing that call. Otherwise, this is <code>undefined</code>. (Taken together with the <code>introductionScriptOffset</code> property, one can determine the call's source and position within that source of the call.)
 
 An introduction call is a function call (or assignment to a setter property) that introduces new JavaScript code to the system. This is one of the following:
 <ul>
