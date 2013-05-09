@@ -204,6 +204,12 @@ A descriptor for an accessor property has the form:
 
 where <i>getter</i> and <i>setter</i> are grips on the property's getter and setter functions. These may be <tt>{&nbsp;"type":"undefined"&nbsp;}</tt> if the property lacks the given accessor function.
 
+A <b>safe getter value descriptor</b> provides a value that an inherited accessor returned when applied to an instance. (See [[#Finding_An_Object's_Prototype_And_Properties|Finding An Object's Prototype And Properties]] for an explanation of why and when such descriptors are used.) Such a descriptor has the form:
+
+  { "getterValue": <i>value</i>, getterPrototypeLevel: <i>level</i> }
+
+where <i>value</i> is a grip on the value the getter returned, and <i>level</i> is the number of steps up the object's prototype chain one must take to find the object on which the getter appears as an own property. If the getter appears directly on the object, <i>level</i> is zero.
+
 For example, if the JavaScript program being debugged evaluates the expression:
 
   ({x:10, y:"kaiju", get a() { return 42; }})
@@ -216,12 +222,24 @@ and sending a [[#Finding_An_Object's_Prototype_And_Properties|"prototypeAndPrope
 
   { "from":<i>actor</i>, "prototype":{ "type":"object", "class":"Object", "actor":<i>objprotoActor</i> },
     "ownProperties":{ "x":{ "enumerable":true, "configurable":true, "writeable":true, "value":10 },
-                       "y":{ "enumerable":true, "configurable":true, "writeable":true, "value":"kaiju" },
-                       "a":{ "enumerable":true, "configurable":true,
-                             "get":{ "type":"object", "class":"Function", "actor":<i>getterActor</i> },
-                             "set":{ "type":"undefined" }
-                           }
+                      "y":{ "enumerable":true, "configurable":true, "writeable":true, "value":"kaiju" },
+                      "a":{ "enumerable":true, "configurable":true,
+                            "get":{ "type":"object", "class":"Function", "actor":<i>getterActor</i> },
+                            "set":{ "type":"undefined" }
+                          }
                      }
+  }
+
+Sending a [[#Finding_An_Object's_Prototype_And_Properties|"prototypeAndProperties"]] request to an object actor referring to a DOM mouse event might produce the following reply:
+
+  { "from":<i>mouseEventActor</i>, "prototype":{ "type":"object", "class":"MouseEvent", "actor":<i>mouseEventProtoActor</i> },
+    "ownProperties":{ }
+    "safeGetterValues":{ "screenX": { valueViaSafeGetter: 1000, getterPrototypeLevel: 1 },
+                         "screenY": { valueViaSafeGetter: 1000, getterPrototypeLevel: 1 },
+                         "clientX": { valueViaSafeGetter: 800,  getterPrototypeLevel: 1 },
+                         "clientY": { valueViaSafeGetter: 800,  getterPrototypeLevel: 1 },
+                         <i>...</i>
+                       }
   }
 
 ==== Finding An Object's Prototype And Properties ====
@@ -239,6 +257,14 @@ where <i>prototype</i> is a grip on the object's prototype (possibly <tt>{&nbsp;
   { <i>name</i>:<i>descriptor</i>, ... }
 
 with a <i>name</i>:<i>descriptor</i> pair for each of the object's own properties.
+
+The web makes extensive use of inherited accessor properties; for example, the <code>clientX</code> and <code>clientY</code> properties of a mouse click event are actually accessor properties which the event object inherits from its prototype chain. It can be very valuable to display such properties' values directly on the object (taking care to distinguish them from true "own" properties), if the server can determine that the getters can be called without side effects.
+
+To this end, when possible, the server may provide safe getter value descriptors for an object, as described in [[#Property_Descriptors|Property Descriptors]] above, reporting the values that getter functions found on the object's prototype chain return when applied to that object. If the server chooses to provide any, the reply includes a <code>"safeGetterValues"</code> property of the form:
+
+  { <i>name</i>:<i>descriptor</i>, ... }
+
+with a <i>name</i>:<i>descriptor</i> pair for each safe getter the object inherits from its prototype chain, or that appears directly on the object. Each <i>descriptor</i> here is a safe getter value descriptor.
 
 <i>TODO: What about objects with many properties?</i>
 
