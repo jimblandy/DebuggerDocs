@@ -206,9 +206,10 @@ where <i>getter</i> and <i>setter</i> are grips on the property's getter and set
 
 A <b>safe getter value descriptor</b> provides a value that an inherited accessor returned when applied to an instance. (See [[#Finding_An_Object's_Prototype_And_Properties|Finding An Object's Prototype And Properties]] for an explanation of why and when such descriptors are used.) Such a descriptor has the form:
 
-  { "getterValue": <i>value</i>, getterPrototypeLevel: <i>level</i> }
+  { "getterValue": <i>value</i>, "getterPrototypeLevel": <i>level</i>,
+    "enumerable":<i>enumerable</i>, "writable":<i>writable</i> }
 
-where <i>value</i> is a grip on the value the getter returned, and <i>level</i> is the number of steps up the object's prototype chain one must take to find the object on which the getter appears as an own property. If the getter appears directly on the object, <i>level</i> is zero.
+where <i>value</i> is a grip on the value the getter returned, <i>level</i> is the number of steps up the object's prototype chain one must take to find the object on which the getter appears as an own property. If the getter appears directly on the object, <i>level</i> is zero. The <i>writable</i> property is true if the inherited accessor has a setter, and false otherwise.
 
 For example, if the JavaScript program being debugged evaluates the expression:
 
@@ -234,10 +235,14 @@ Sending a [[#Finding_An_Object's_Prototype_And_Properties|"prototypeAndPropertie
 
   { "from":<i>mouseEventActor</i>, "prototype":{ "type":"object", "class":"MouseEvent", "actor":<i>mouseEventProtoActor</i> },
     "ownProperties":{ }
-    "safeGetterValues":{ "screenX": { valueViaSafeGetter: 1000, getterPrototypeLevel: 1 },
-                         "screenY": { valueViaSafeGetter: 1000, getterPrototypeLevel: 1 },
-                         "clientX": { valueViaSafeGetter: 800,  getterPrototypeLevel: 1 },
-                         "clientY": { valueViaSafeGetter: 800,  getterPrototypeLevel: 1 },
+    "safeGetterValues":{ "screenX": { "valueViaSafeGetter": 1000, "getterPrototypeLevel": 1,
+                                      "enumerable": true, "writable": false },
+                         "screenY": { "valueViaSafeGetter": 1000, "getterPrototypeLevel": 1,
+                                      "enumerable": true, "writable": false },
+                         "clientX": { "valueViaSafeGetter": 800,  "getterPrototypeLevel": 1,
+                                      "enumerable": true, "writable": false },
+                         "clientY": { "valueViaSafeGetter": 800,  "getterPrototypeLevel": 1,
+                                      "enumerable": true, "writable": false },
                          <i>...</i>
                        }
   }
