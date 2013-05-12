@@ -235,13 +235,13 @@ Sending a [[#Finding_An_Object's_Prototype_And_Properties|"prototypeAndPropertie
 
   { "from":<i>mouseEventActor</i>, "prototype":{ "type":"object", "class":"MouseEvent", "actor":<i>mouseEventProtoActor</i> },
     "ownProperties":{ }
-    "safeGetterValues":{ "screenX": { "valueViaSafeGetter": 1000, "getterPrototypeLevel": 1,
+    "safeGetterValues":{ "screenX": { "getterValue": 1000, "getterPrototypeLevel": 1,
                                       "enumerable": true, "writable": false },
-                         "screenY": { "valueViaSafeGetter": 1000, "getterPrototypeLevel": 1,
+                         "screenY": { "getterValue": 1000, "getterPrototypeLevel": 1,
                                       "enumerable": true, "writable": false },
-                         "clientX": { "valueViaSafeGetter": 800,  "getterPrototypeLevel": 1,
+                         "clientX": { "getterValue": 800,  "getterPrototypeLevel": 1,
                                       "enumerable": true, "writable": false },
-                         "clientY": { "valueViaSafeGetter": 800,  "getterPrototypeLevel": 1,
+                         "clientY": { "getterValue": 800,  "getterPrototypeLevel": 1,
                                       "enumerable": true, "writable": false },
                          <i>...</i>
                        }
