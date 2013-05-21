@@ -555,11 +555,17 @@ The server replies:
 
 where <i>childProcessRootActor</i> is the name of the root actor in the child. (Note that this will not be <code>"root"</code>, as that name refers to the <code>b2g</code> process's own root actor.) After this reply should come an initial root actor greeting from <i>childProcessRootActor</i>.
 
-If a child process exits, crashes, or otherwise becomes unable to respond to further packets, the main process's root actor may fake error replies from child process actors of the form:
+A child process to which the client has successfully attached may exit, crash, or otherwise become unable to respond to further packets at any time. If the client attempts to send a packet to an actor in a child process that no longer exists, the main process's root actor fakes an error reply, apparently from the addressed actor, of the form:
 
   { "from":<i>deadActorName</i>, "error":"childProcessGone", "message":<i>message</i> }
 
 where <i>message</i> provides more details about why the child is unexpectedly incommunicado.
+
+If the server mentions a child process actor in a <code>"listChildProcesses"</code> reply, then that actor lives at least until the next <code>"listChildProcesses"</code> request, even if the underlying process exits or crashes. Thus, it is always safe to send an <code>"attach"</code> request to a child process actor listed in the most recent <code>"listChildProcesses"</code> reply; if the actual child process has exited in the mean time, the child process actor will reply to the <code>"attach"</code> request as follows:
+
+  { "from":<i>childProcessActor</i>, "type":"exited" }
+
+If the child process still exists when the server receives a new <code>"listChildProcesses"</code> request, the server will list the same actor representing it.
 
 <i>Implementation note:</i> All actors in child process servers, including the child's root actor, should have names with a common prefix chosen by the main process. The main process can then use this prefix to route client packets to the appropriate child. Thus, the main process need only maintain a table mapping actor name prefixes to child connections, instead of a table of all child processes' actors' names. In fact, the main process can remain entirely ignorant of what protocol the child speaks, while still shuttling packets back and forth appropriately.
 
