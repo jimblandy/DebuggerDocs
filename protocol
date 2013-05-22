@@ -1113,6 +1113,42 @@ to which the breakpoint actor will reply, simply:
 
 This closes communications with <i>breakpointActor</i>.
 
+= Event Listeners =
+
+A client can request a list of all the event listeners and event handlers (see [https://developer.mozilla.org/docs/Web/Guide/DOM/Events/Event_handlers#Definitions DOM Event Handlers] for definitions of the two terms) attached to the page. This is done with a request of the form:
+
+  { "to":<i>thread</i>, "type":"eventListeners" }
+
+The thread will reply with a response of the form:
+
+  { "from":<i>thread</i>, "listeners":[ <i>listener</i>, ... ] }
+
+A <i>listener</i> value has the form:
+
+  { "node":<i>node-identifier</i>,
+    "type":<i>event-type</i>,
+    "capturing":<i>capturing</i>,
+    "allowsUntrusted":<i>allowsUntrusted</i>,
+    "inSystemEventGroup":<i>inSystemEventGroup</i>,
+    "isEventHandler":<i>isEventHandler</i>,
+    "sources":[<i>sourceForm1</i>, ..., <i>sourceFormN</i>] }
+
+Each <i>node-identifier</i> is a unique CSS selector of the DOM element on which the event handler is attached, or "window". <i>event-type</i> is the type of the DOM event as specified in the DOM specification. <i>capturing</i> is a boolean flag indicating whether the event listener is in capture mode. <i>allowsUntrusted</i> is a boolean flag that indicates whether the listener allows untrusted events. <i>inSystemEventGroup</i> is a boolean flag that indicates whether or not the event listener is in the system event group. <i>isEventHandler</i> is a boolean flag indicating whether it is an event handler or an event listener (see [https://developer.mozilla.org/docs/Web/Guide/DOM/Events/Event_handlers#Definitions DOM Event Handlers] for definitions of the two terms). <i>sourceForms</i> are described in [[#Loading_Script_Sources|Loading Script Sources]].
+
+The client can request that execution pauses on a DOM event, by sending a request of the form:
+
+  { "to":<i>thread</i>, "type":"resume", "pauseOnDOMEvents": [<i>event-type</i>, ... ] }
+
+The <tt>pauseOnDOMEvents</tt> property contains an array of the types of DOM events that should pause execution. Execution will pause whenever an event of the specified type is fired and a listener has been defined for it, otherwise the stack on pause would have been empty, which wouldn't provide a useful inspection ability to the user.
+
+A request for pause on all kinds of events can be made using the "*" wildcard event type:
+
+  { "to":<i>thread</i>, "type":"resume", "pauseOnDOMEvents": [ "*" ] }
+
+In order to change the types of events that should pause execution, a new array of event types should be sent to the server. Any events not present in the new list will no longer trigger pauses. Consequently, sending an empty array or simply omitting the <tt>pauseOnDOMEvents</tt> property disables pausing on DOM events.
+
+Execution pauses appear as regular breakpoint pauses, with the only difference being that the client is not required to keep track of these breakpoint actors, or deal with them in any way. They can be considered as <i>hidden breakpoints</i> from the point of view of a debugger frontend.
+
 = Watchpoints =
 = Frame Pop Watches =
 
