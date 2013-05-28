@@ -537,6 +537,8 @@ In a <i>childProcess</i> form representing a content child process or app, <i>ty
 
 Once a <code>"listChildProcesses"</code> reply has been sent, only those child process actor names given are valid; other names mentioned in prior <code>"listChildProcesses"</code> responses are invalid.
 
+If a child process mentioned in one <code>"listChildProcesses"</code> request still exists when the server receives the next <code>"listChildProcesses"</code> request, the server will list the same actor representing that child process.
+
 If the root actor replies to a <code>"listChildProcesses"</code> request, and then the set of live children changes, the <code>b2g</code> root actor sends the client a packet of the following form, unsolicited:
 
   { "from":"root", "type":"childProcessesChanged" }
@@ -545,27 +547,41 @@ The client may then request a fresh child process list if it cares. The root act
 
 === Attaching To Child Processes ===
 
-To begin communicating with a child process's root actor, the client sends a request of the form:
+To begin communicating with a child process, the client sends a request to the child process actor of the form:
 
   { "to":<i>childProcessActor</i>, "type":"attach" }
 
-The server replies:
+The child process actor replies:
 
   { "from":<i>childProcessActor</i>, "root":<i>childProcessRootActor</i> }
 
 where <i>childProcessRootActor</i> is the name of the root actor in the child. (Note that this will not be <code>"root"</code>, as that name refers to the <code>b2g</code> process's own root actor.) After this reply should come an initial root actor greeting from <i>childProcessRootActor</i>.
 
-A child process to which the client has successfully attached may exit, crash, or otherwise become unable to respond to further packets at any time. If the client attempts to send a packet to an actor in a child process that no longer exists, the main process's root actor fakes an error reply, apparently from the addressed actor, of the form:
+If the client is already attached to the given child process, the child process actor replies:
 
-  { "from":<i>deadActorName</i>, "error":"childProcessGone", "message":<i>message</i> }
+  { "from":<i>childProcessActor</i>, "error": "wrongState", "message":<i>message</i> }
 
-where <i>message</i> provides more details about why the child is unexpectedly incommunicado.
+where <i>message</i> is a string explaining the problem.
 
 If the server mentions a child process actor in a <code>"listChildProcesses"</code> reply, then that actor lives at least until the next <code>"listChildProcesses"</code> request, even if the underlying process exits or crashes. Thus, it is always safe to send an <code>"attach"</code> request to a child process actor listed in the most recent <code>"listChildProcesses"</code> reply; if the actual child process has exited in the mean time, the child process actor will reply to the <code>"attach"</code> request as follows:
 
-  { "from":<i>childProcessActor</i>, "type":"exited" }
+  { "from":<i>childProcessActor</i>, "error": "childProcessGone",
+    "reason":<i>reason</i>, "message":<i>message</i> }
 
-If the child process still exists when the server receives a new <code>"listChildProcesses"</code> request, the server will list the same actor representing it.
+where <i>reason</i> is either the string <code>"exited"</code> or the string <code>"crashed"</code>, indicating why the child is no more, and <i>message</i> is a string explaining the problem. (Like any other protocol packet, this packet may include more properties giving further detail, perhaps describing the circumstances of its demise.)
+
+A child process to which the client has successfully attached may exit, crash, or otherwise become unable to respond to further packets at any time. When the main process notices this, the expired process's child process actor sends the client a notification of the form:
+
+  { "from":<i>childProcessActor</i>, "notifyChildProcessGone":<i>reason</i> }
+
+where <i>reason</i> and any additional properties are as in a <code>"childProcessGone"</code> error reply to an <code>"attach"</code> request.
+
+If the client attempts to send a packet to an actor in a child process that no longer exists, the main process's root actor fakes an error reply, apparently from the addressed actor, of the form:
+
+  { "from":<i>deadActorName</i>, "error":"childProcessGone",
+    "reason":<i>reason</i>, "message":<i>message</i> }
+
+where <i>reason</i>, <i>message</i>, and any additional properties are as in a <code>"childProcessGone"</code> error reply to an <code>"attach"</code> request.
 
 <i>Implementation note:</i> All actors in child process servers, including the child's root actor, should have names with a common prefix chosen by the main process. The main process can then use this prefix to route client packets to the appropriate child. Thus, the main process need only maintain a table mapping actor name prefixes to child connections, instead of a table of all child processes' actors' names. In fact, the main process can remain entirely ignorant of what protocol the child speaks, while still shuttling packets back and forth appropriately.
 
