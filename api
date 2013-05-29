@@ -1023,7 +1023,7 @@ An introduction call is a function call (or assignment to a setter property) tha
 </ul>
 
 <dt>introductionScriptOffset
-<dd>If <code>introductionScript</code> is a script, this is the offset within that script of the introduction call.
+<dd>If <code>introductionScript</code> is a script, this is the bytecode offset within that script of the introduction call.
 
 <dt>introductionKind
 <dd>A string indicating what kind of introduction call introduced this <code>Debugger.Source</code>'s code into the system. This is <code>undefined</code> if <code>introductionScript</code> is undefined; otherwise, it is one of the following strings:
