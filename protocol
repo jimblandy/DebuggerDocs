@@ -565,14 +565,14 @@ where <i>message</i> is a string explaining the problem.
 
 If the server mentions a child process actor in a <code>"listChildProcesses"</code> reply, then that actor lives at least until the next <code>"listChildProcesses"</code> request, even if the underlying process exits or crashes. Thus, it is always safe to send an <code>"attach"</code> request to a child process actor listed in the most recent <code>"listChildProcesses"</code> reply; if the actual child process has exited in the mean time, the child process actor will reply to the <code>"attach"</code> request as follows:
 
-  { "from":<i>childProcessActor</i>, "error": "childProcessGone",
+  { "from":<i>childProcessActor</i>, "error":"childProcessGone",
     "reason":<i>reason</i>, "message":<i>message</i> }
 
 where <i>reason</i> is either the string <code>"exited"</code> or the string <code>"crashed"</code>, indicating why the child is no more, and <i>message</i> is a string explaining the problem. (Like any other protocol packet, this packet may include more properties giving further detail, perhaps describing the circumstances of its demise.)
 
 A child process to which the client has successfully attached may exit, crash, or otherwise become unable to respond to further packets at any time. When the main process notices this, the expired process's child process actor sends the client a notification of the form:
 
-  { "from":<i>childProcessActor</i>, "notifyChildProcessGone":<i>reason</i> }
+  { "from":<i>childProcessActor</i>, "type":"notifyChildProcessGone", reason:<i>reason</i> }
 
 where <i>reason</i> and any additional properties are as in a <code>"childProcessGone"</code> error reply to an <code>"attach"</code> request.
 
