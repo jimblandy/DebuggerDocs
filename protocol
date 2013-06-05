@@ -133,7 +133,8 @@ If the class is "Function", the grip may have additional properties:
 
   { "type":"object", "class":"Function", "actor":<i>actor</i>,
     "name":<i>name</i>, "displayName":<i>displayName</i>,
-    "userDisplayName":<i>userDisplayName</i> }
+    "userDisplayName":<i>userDisplayName</i>,
+    "url":<i>url</i>, "line":<i>line</i>, "column":<i>column</i> }
 
 These additional properties are:
 <dl>
@@ -143,6 +144,12 @@ These additional properties are:
 <dd>A name the system has inferred for the function (say, <code>"Foo.method"</code>). If the function has a given name (appearing in the grip as the <code>"name"</code> property), or if the system was unable to infer a suitable name for it, the <code>displayName</code> property is omitted.
 <dt><i>userDisplayName</i>
 <dd>If the function object has a <code>"displayName"</code> value property whose value is a string, this is that property's value. (Many JavaScript development tools consult such properties, to give developers a way to provide their own meaningful names for functions.)
+<dt><i>url</i>
+<dd>The URL of the function's source location (see [[#Source_Locations|Source Locations]]);
+<dt><i>line</i>
+<dd>The line number of the function's source location (see [[#Source_Locations|Source Locations]]);
+<dt><i>column</i>
+<dd>The column number of the function's source location (see [[#Source_Locations|Source Locations]]);
 </dl>
 
   { "type":"longString", "initial":<i>initial</i>, "length":<i>length</i>, "actor":<i>actor</i> }
@@ -698,6 +705,10 @@ The thread stopped at the watchpoints represented by the given actors.
 
 The expression given in the client's prior <tt>clientEvaluate</tt> command has completed execution; <i>completion</i> is a [[#Completion_Values|completion value]] describing how it completed. The frame created for the <tt>clientEvaluate</tt> resumption has been popped from the stack. See [[#Evaluating_Source-Language_Expressions|Evaluating Source-Language Expressions]] for details.
 
+  { "type":"pauseOnDOMEvents" }
+
+The client resumed the thread with a <tt>"resume"</tt> packet that included a <tt>pauseOnDOMEvents</tt> property, and the thread stopped because it executed an event in that list.
+
 == Resuming a Thread ==
 
 If a thread is in the <b>Paused</b> state, the client can resume it by sending a packet of the following form:
@@ -750,7 +761,31 @@ To force the current frame to end execution immediately, the client can send a p
 
 where <i>completion</i> is a [[#Completion_Values|completion value]] indicating whether the frame should return a value, throw an exception, or be terminated. Execution resumes in the current frame's caller, in the manner appropriate for <i>completion</i>.
 
-A <tt>"resume"</tt> packet may not include both a <tt>"resumeLimit"</tt> property and a <tt>"forceCompletion"</tt> property.
+To request that execution pause when an exception is thrown, the client may send a request of the form:
+
+  { "to":<i>thread</i>, "type":"resume", "pauseOnExceptions": true }
+
+If <tt>pauseOnExceptions</tt> has a falsy value or is omitted, execution will continue in the face of thrown exceptions. When a thread pauses because an exception was thrown, the "paused" packet's <i>reason</i> will have the following form:
+
+  { "type":"exception", "exception":<i>exception</li> }
+
+where <i>exception</i> is a grip on the exception object.
+
+To request that execution pause on a DOM event, the client may send a request of the form:
+
+  { "to":<i>thread</i>, "type":"resume", "pauseOnDOMEvents": [<i>event-type</i>, ... ] }
+
+The <tt>pauseOnDOMEvents</tt> property contains an array of the types of DOM events that should pause execution. Execution pauses immediately after the frame for the call to the listener has been pushed, and before the listener has begun execution.
+
+A request to pause on all kinds of events can be made using the "*" wildcard event type:
+
+  { "to":<i>thread</i>, "type":"resume", "pauseOnDOMEvents": "*" }
+
+A <tt>pauseOnDOMEvents</tt> applies only until the next pause. In order to change the types of events that should pause execution, a new array of event types should be sent to the server. Any events not present in the new list will no longer trigger pauses. Consequently, sending an empty array or simply omitting the <tt>pauseOnDOMEvents</tt> property disables pausing on DOM events.
+
+When a thread pauses because a DOM event was triggered, the "paused" packet's <i>reason</i> will have a type of <tt>"pauseOnDOMEvents"</tt>.
+
+If a <tt>"forceCompletion"</tt> property is present in a <tt>"resume"</tt> packet, along with <tt>"resumeLimit"</tt>, <tt>"pauseOnExceptions"</tt> or <tt>"pauseOnDOMEvents"</tt>, it will take precedence and cause them to be ignored.
 
 A <tt>"resume"</tt> packet closes the pause actor the client provided in the "paused" packet that began the pause.
 
@@ -1115,39 +1150,43 @@ This closes communications with <i>breakpointActor</i>.
 
 = Event Listeners =
 
-A client can request a list of all the event listeners and event handlers (see [https://developer.mozilla.org/docs/Web/Guide/DOM/Events/Event_handlers#Definitions DOM Event Handlers] for definitions of the two terms) attached to the page. This is done with a request of the form:
+To request a list of all the event listeners and event handlers (see [https://developer.mozilla.org/docs/Web/Guide/DOM/Events/Event_handlers#Definitions DOM Event Handlers] for definitions of the two terms) attached to the page, the client sends a request of the form:
 
   { "to":<i>thread</i>, "type":"eventListeners" }
 
-The thread will reply with a response of the form:
+The thread replies with a response of the form:
 
   { "from":<i>thread</i>, "listeners":[ <i>listener</i>, ... ] }
 
-A <i>listener</i> value has the form:
+Such requests can be sent when the thread is either paused or running. A <i>listener</i> value has the form:
 
-  { "node":<i>node-identifier</i>,
-    "type":<i>event-type</i>,
+  { "node":{ "selector":<i>node-selector</i>, "object":<i>node</i> },
+    "type":<i>type</i>,
     "capturing":<i>capturing</i>,
     "allowsUntrusted":<i>allowsUntrusted</i>,
     "inSystemEventGroup":<i>inSystemEventGroup</i>,
     "isEventHandler":<i>isEventHandler</i>,
-    "sources":[<i>sourceForm1</i>, ..., <i>sourceFormN</i>] }
+    "function":<i>function</i> }
 
-Each <i>node-identifier</i> is a unique CSS selector of the DOM element on which the event handler is attached, or "window". <i>event-type</i> is the type of the DOM event as specified in the DOM specification. <i>capturing</i> is a boolean flag indicating whether the event listener is in capture mode. <i>allowsUntrusted</i> is a boolean flag that indicates whether the listener allows untrusted events. <i>inSystemEventGroup</i> is a boolean flag that indicates whether or not the event listener is in the system event group. <i>isEventHandler</i> is a boolean flag indicating whether it is an event handler or an event listener (see [https://developer.mozilla.org/docs/Web/Guide/DOM/Events/Event_handlers#Definitions DOM Event Handlers] for definitions of the two terms). <i>sourceForms</i> are described in [[#Loading_Script_Sources|Loading Script Sources]].
-
-The client can request that execution pauses on a DOM event, by sending a request of the form:
-
-  { "to":<i>thread</i>, "type":"resume", "pauseOnDOMEvents": [<i>event-type</i>, ... ] }
-
-The <tt>pauseOnDOMEvents</tt> property contains an array of the types of DOM events that should pause execution. Execution will pause whenever an event of the specified type is fired and a listener has been defined for it, otherwise the stack on pause would have been empty, which wouldn't provide a useful inspection ability to the user.
-
-A request for pause on all kinds of events can be made using the "*" wildcard event type:
-
-  { "to":<i>thread</i>, "type":"resume", "pauseOnDOMEvents": [ "*" ] }
-
-In order to change the types of events that should pause execution, a new array of event types should be sent to the server. Any events not present in the new list will no longer trigger pauses. Consequently, sending an empty array or simply omitting the <tt>pauseOnDOMEvents</tt> property disables pausing on DOM events.
-
-Execution pauses appear as regular breakpoint pauses, with the only difference being that the client is not required to keep track of these breakpoint actors, or deal with them in any way. They can be considered as <i>hidden breakpoints</i> from the point of view of a debugger frontend.
+The values for these properties are:
+<dl>
+<dt><i>node-selector</i>
+<dd>A unique CSS selector of the DOM element on which the event handler is attached, or <code>"window"</code> if the handler is attached on the window.
+<dt><i>node</i>
+<dd>A grip on the DOM element on which the event handler is attached.
+<dt><i>type</i>
+<dd>The type of the DOM event as specified in the DOM specification (see [https://developer.mozilla.org/docs/XPCOM_Interface_Reference/nsIEventListenerInfo#Attributes nsIEventListenerInfo]).
+<dt><i>capturing</i>
+<dd>A boolean flag indicating whether the event listener is in capture mode (see [https://developer.mozilla.org/docs/XPCOM_Interface_Reference/nsIEventListenerInfo#Attributes nsIEventListenerInfo]).
+<dt><i>allowsUntrusted</i>
+<dd>A boolean flag that indicates whether the listener allows untrusted events (see [https://developer.mozilla.org/docs/XPCOM_Interface_Reference/nsIEventListenerInfo#Attributes nsIEventListenerInfo]).
+<dt><i>inSystemEventGroup</i>
+<dd>A boolean flag that indicates whether or not the event listener is in the system event group (see [https://developer.mozilla.org/docs/XPCOM_Interface_Reference/nsIEventListenerInfo#Attributes nsIEventListenerInfo]).
+<dt><i>isEventHandler</i>
+<dd>A boolean flag indicating whether this is an event handler or an event listener (see [https://developer.mozilla.org/docs/Web/Guide/DOM/Events/Event_handlers#Definitions DOM Event Handlers] for definitions of the two terms). For HTML attribute handlers or assignments to WebIDL properties this flag would be true.
+<dt><i>function</i>
+<dd>A grip on the function object.
+</dl>
 
 = Watchpoints =
 = Frame Pop Watches =
