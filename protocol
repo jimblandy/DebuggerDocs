@@ -783,7 +783,12 @@ The response packet has the following form:
 Where each <i>sourceForm</i> has the following form:
 
   { actor: <i>sourceActorID</i>,
-    url: <i>sourceURL</i> }
+    url: <i>sourceURL</i>,
+    isBlackBoxed: <i>isBlackBoxed</i> }
+
+* <i>sourceActorID</i> is the source actor's id
+* <i>sourceURL</i> is the URL of the source represented by the source actor
+* <i>isBlackBoxed</i> is a boolean specifying whether the source is black boxed. See [[#Black_Boxing_Sources|Black Boxing Sources]].
 
 Each source actor exists throughout the thread's whole lifetime.
 
@@ -811,7 +816,12 @@ The thread replies as follows:
 
 where each <i>frame</i> has the form:
 
-  { "actor":<i>actor</i>, "depth":<i>depth</i>, "type":<i>type</i>, "this":<i>this</i>, ... }
+  { "actor": <i>actor</i>,
+    "depth": <i>depth</i>,
+    "type": <i>type</i>,
+    "this": <i>this</i>,
+    "isBlackBoxed": <i>isBlackBoxed</i>,
+    ... }
 
 where:
 
@@ -819,6 +829,7 @@ where:
 * <i>depth</i> is the number of this frame, starting with zero for the youngest frame on the stack;
 * <i>type</i> is a string indicating what sort of frame this is; and
 * <i>this</i> is a grip on the value of <tt>this</tt> for this call.
+* <i>isBlackBoxed</i> is a boolean specifying whether the frame is inside a black boxed source. See [[#Black_Boxing_Sources|Black Boxing Sources]].
 
 The frame may have other properties, depending on <i>type</i>.
 
@@ -1065,6 +1076,36 @@ This closes communications with <i>breakpointActor</i>.
 = Frame Pop Watches =
 
 <i>TODO: DOM node inspection, highlighting</i>
+
+= Black Boxing Sources=
+
+When a source a is black boxed, the debugger will not pause when it hits breakpoints or debugger statements inside that source. If pausing on exceptions is enabled and an exception is thrown inside a black boxed source, the debugger will not pause until the stack has unwound to a frame in a source that is not black boxed.
+
+Note: Requesting a list of frames or sources from the thread actor, still receives black boxed sources and their frames, but they are marked as black boxed. This way, the client (and its front end) have all the information they need to implement any UI on top of this feature.
+
+To black box a source:
+
+  { "to": <i>sourceActor</i>, "type": "blackbox" }
+
+The <i>sourceActor</i> responds with a blank response on success:
+
+  { "from": <i>sourceActor</i> }
+
+Or an error response on failure:
+
+  { "from": <i>sourceActor</i>, "error": <i>reason</i> }
+
+To un-black box a source:
+
+  { "to": <i>sourceActor</i>, "type": "unblackbox" }
+
+And once again, the <i>sourceActor</i> responds with a blank response on success:
+
+  { "from": <i>sourceActor</i> }
+
+Or an error response on failure:
+
+  { "from": <i>sourceActor</i>, "error": <i>reason</i> }
 
 <!-- Local Variables: -->
 <!-- eval: (visual-line-mode) -->
