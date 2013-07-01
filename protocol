@@ -547,6 +547,26 @@ This indicates that the tab has begun navigating to <i>newURL</i>; JavaScript ex
 
 where <i>newURL</i> and <i>newTitle</i> are the URL and title of the page the tab is now showing. The <i>tabThreadActor</i> given in the response to the original <code>"attach"</code> packet is now debugging the new page's code.
 
+To reload the tab, a client sends a message of the form:
+
+  { "to":<i>tabActor</i>, "type":"reload" }
+
+to which the tab actor simply replies:
+
+  { "from":<i>tabActor</i> }
+
+After the response packet is sent, <i>tabNavigated</i> notifications will also be sent as the navigation takes place.
+
+To navigate the tab to another page, a client sends a message of the form:
+
+  { "to":<i>tabActor</i>, "type":"navigateTo", "url":<i>url</i> }
+
+where <i>url</i> is the URL of the page to navigate to. The tab actor simply replies:
+
+  { "from":<i>tabActor</i> }
+
+After the response packet is sent, <i>tabNavigated</i> notifications will also be sent as the navigation takes place.
+
 If the user closes a tab to which the client is attached, its <i>tabActor</i> sends a notification packet of the form:
 
   { "from":<i>tabActor</i>, "type":"tabDetached" }
