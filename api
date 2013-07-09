@@ -441,14 +441,20 @@ If the program resumed the generator by calling its <code>send</code> method and
 The functions described below may only be called with a <code>this</code> value referring to a <code>Debugger.Frame</code> instance; they may not be used as methods of other kinds of objects.
 
 <dl>
-<dt>eval(<i>code</i>)
+<dt>eval(<i>code</i>, [<i>options</i>])
 <dd>Evaluate <i>code</i> in the execution context of this frame, and return a [[#Completion_Values|completion value]] describing how it completed. <i>Code</i> is a string. If this frame's <code>environment</code> property is <code>null</code>, throw a <code>TypeError</code>. All extant handler methods, breakpoints, watchpoints, and so on remain active during the call. This function follows the [[#Invocation_Functions_and_.22debugger.22_Frames|invocation function conventions]].
 
 <i>Code</i> is interpreted as strict mode code when it contains a Use Strict Directive, or the code executing in this frame is strict mode code.
 
 If <i>code</i> is not strict mode code, then variable declarations in <i>code</i> affect the environment of this frame. (In the terms used by the ECMAScript specification, the <code>VariableEnvironment</code> of the execution context for the eval code is the <code>VariableEnvironment</code> of the execution context that this frame represents.) If implementation restrictions prevent SpiderMonkey from extending this frame's environment as requested, this call throws an Error exception.
 
-<dt>evalWithBindings(<i>code</i>, <i>bindings</i>)
+<i>Options</i> may have the following property:
+<dl>
+<dt>url
+<dd>The filename to use for the script. If ommitted it defaults to "debugger eval code".
+</dl>
+
+<dt>evalWithBindings(<i>code</i>, <i>bindings</i>, [<i>options</i>])
 <dd>Like <code>eval</code>, but evaluate <i>code</i> in the environment of this frame, extended with bindings from the object <i>bindings</i>. For each own enumerable property of <i>bindings</i> named <i>name</i> whose value is <i>value</i>, include a variable in the environment in which <i>code</i> is evaluated named <i>name</i>, whose value is <i>value</i>. Each <i>value</i> must be a debuggee value. (This is not like a <code>with</code> statement: <i>code</i> may access, assign to, and delete the introduced bindings without having any effect on the <i>bindings</i> object.)
 
 This method allows debugger code to introduce temporary bindings that are visible to the given debuggee code and which refer to debugger-held debuggee values, and do so without mutating any existing debuggee environment.
@@ -787,14 +793,20 @@ As [[#Debugger_Object|described above]], each <code>Debugger.Object</code> insta
 <dt>apply(<i>this</i>, <i>arguments</i>)
 <dd>If the referent is callable, call it with the given <i>this</i> value and the argument values in <i>arguments</i>, and return a [[#Completion_Values|completion value]] describing how the call completed. <i>This</i> should be a debuggee value, or <code>{ asConstructor: true }</code> to invoke <i>function</i> as a constructor, in which case SpiderMonkey provides an appropriate <code>this</code> value itself. <i>Arguments</i> must either be an array (in the debugger) of debuggee values, or <code>null</code> or <code>undefined</code>, which are treated as an empty array. All extant handler methods, breakpoints, watchpoints, and so on remain active during the call. Details of how the call is carried out are given in the description of [[#Debugger.Frame.Debugger|Debugger.Frame.Debugger frames]]. If the referent is not callable, throw a <code>TypeError</code>. This function follows the [[#Invocation_Functions_and_.22debugger.22_Frames|invocation function conventions]].
 
-<dt>evalInGlobal(<i>code</i>)
+<dt>evalInGlobal(<i>code</i>, [<i>options</i>])
 <dd>If the referent is a global object, evaluate <i>code</i> in that global environment, and return a [[#Completion_Values|completion value]] describing how it completed. <i>Code</i> is a string. All extant handler methods, breakpoints, watchpoints, and so on remain active during the call. This function follows the [[#Invocation_Functions_and_.22debugger.22_Frames|invocation function conventions]]. If the referent is not a global object, throw a <code>TypeError</code> exception.
 
 <i>Code</i> is interpreted as strict mode code when it contains a Use Strict Directive.
 
 If <i>code</i> is not strict mode code, then variable declarations in <i>code</i> affect the referent global object. (In the terms used by the ECMAScript specification, the <code>VariableEnvironment</code> of the execution context for the eval code is the referent.)
 
-<dt>evalInGlobalWithBindings(<i>code</i>, <i>bindings</i>)
+<i>Options</i> may have the following property:
+<dl>
+<dt>url
+<dd>The filename to use for the script. If ommitted it defaults to "debugger eval code".
+</dl>
+
+<dt>evalInGlobalWithBindings(<i>code</i>, <i>bindings</i>, [<i>options</i>])
 <dd>Like <code>evalInGlobal</code>, but evaluate <i>code</i> using the referent as the variable object, but with a lexical environment extended with bindings from the object <i>bindings</i>. For each own enumerable property of <i>bindings</i> named <i>name</i> whose value is <i>value</i>, include a variable in the lexical environment in which <i>code</i> is evaluated named <i>name</i>, whose value is <i>value</i>. Each <i>value</i> must be a debuggee value. (This is not like a <code>with</code> statement: <i>code</i> may access, assign to, and delete the introduced bindings without having any effect on the <i>bindings</i> object.)
 
 This method allows debugger code to introduce temporary bindings that are visible to the given debuggee code and which refer to debugger-held debuggee values, and do so without mutating any existing debuggee environment.
