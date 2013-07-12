@@ -329,6 +329,23 @@ Descriptors for accessor properties have the form:
 
 where <i>get</i> and <i>set</i> are grips on the property's getter and setter functions; either or both are omitted if the property lacks the given accessor function. <i>Configurable</i> and <i>enumerable</i> are as described above.
 
+=== Finding properties of multiple objects ===
+
+You can save on roundtrips to the server and query properties of multiple objects at the same time by sending a request to the thread actor:
+
+  { "to":<i>threadActor</i>, "type":"prototypesAndProperties",
+    "actors":[<i>gripActor1</i>, <i>gripActor2</i>, ...] }
+
+The actor will respond with a mapping of actor names to properties and prototypes:
+
+  { "from":<i>threadActor</i>,
+    "actors":{ <i>gripActor1</i>: {"prototype":..., "ownProperties":..., ...},
+               <i>gripActor2</i>: {"prototype":..., "ownProperties":..., ...}
+             }
+  }
+
+Essentially, the returned data will be the same as is the case with [[#Finding_An_Object's_Prototype_And_Properties|"prototypeAndProperties"]].
+
 <i>TODO: assign to value property</i>
 
 <i>TODO: special stuff for arrays</i>
