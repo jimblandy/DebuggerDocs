@@ -555,7 +555,7 @@ to which the tab actor simply replies:
 
   { "from":<i>tabActor</i> }
 
-After the response packet is sent, <i>tabNavigated</i> notifications will also be sent as the navigation takes place.
+The server will send <i>tabNavigated</i> notifications after the response packet, as the navigation takes place.
 
 To navigate the tab to another page, a client sends a message of the form:
 
@@ -565,7 +565,7 @@ where <i>url</i> is the URL of the page to navigate to. The tab actor simply rep
 
   { "from":<i>tabActor</i> }
 
-After the response packet is sent, <i>tabNavigated</i> notifications will also be sent as the navigation takes place.
+The server will also send <i>tabNavigated</i> notifications after the response packet, as the navigation takes place.
 
 If the user closes a tab to which the client is attached, its <i>tabActor</i> sends a notification packet of the form:
 
