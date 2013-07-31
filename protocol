@@ -820,7 +820,6 @@ where each <i>frame</i> has the form:
     "depth": <i>depth</i>,
     "type": <i>type</i>,
     "this": <i>this</i>,
-    "isBlackBoxed": <i>isBlackBoxed</i>,
     ... }
 
 where:
@@ -829,7 +828,6 @@ where:
 * <i>depth</i> is the number of this frame, starting with zero for the youngest frame on the stack;
 * <i>type</i> is a string indicating what sort of frame this is; and
 * <i>this</i> is a grip on the value of <tt>this</tt> for this call.
-* <i>isBlackBoxed</i> is a boolean specifying whether the frame is inside a black boxed source. See [[#Black_Boxing_Sources|Black Boxing Sources]].
 
 The frame may have other properties, depending on <i>type</i>.
 
@@ -839,13 +837,19 @@ All actors mentioned in the frame or grips appearing in the frame (<i>actor</i>,
 
 A frame for global code has the form:
 
-  { "actor":<i>actor</i>, "depth":<i>depth</i>, "type":"global", "this":<i>this</i>,
-    "where":<i>location</i>, "environment":<i>environment</i> }
+  { "actor":<i>actor</i>,
+    "depth":<i>depth</i>,
+    "type":"global",
+    "this":<i>this</i>,
+    "where":<i>location</i>,
+    "source":<i>source</i>,
+    "environment":<i>environment</i> }
 
 where:
 
 * <i>location</i> is the source location of the current point of execution in the global code (see [[#Source_Locations|Source Locations]]);
 * <i>environment</i> is a value representing the lexical environment of the current point of execution (see [[#Lexical_Environments|Lexical Environments]]);
+* <i>source</i> is the source form described in [[#Loading_Script_Sources|Loading Script Sources]]
 
 and other properties are as above.
 
