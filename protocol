@@ -765,7 +765,7 @@ To request that execution pause when an exception is thrown, the client may send
 
   { "to":<i>thread</i>, "type":"resume", "pauseOnExceptions": true }
 
-If <tt>pauseOnExceptions</tt> has a falsy value or is omitted, execution will continue in the face of thrown exceptions. When a thread pauses because an exception was thrown, the "paused" packet's <i>reason</i> will have the following form:
+If <tt>pauseOnExceptions</tt> has the value <tt>false</tt> or is omitted, execution will continue in the face of thrown exceptions. When a thread pauses because an exception was thrown, the "paused" packet's <i>reason</i> will have the following form:
 
   { "type":"exception", "exception":<i>exception</li> }
 
@@ -785,7 +785,9 @@ A <tt>pauseOnDOMEvents</tt> applies only until the next pause. In order to chang
 
 When a thread pauses because a DOM event was triggered, the "paused" packet's <i>reason</i> will have a type of <tt>"pauseOnDOMEvents"</tt>.
 
-If a <tt>"forceCompletion"</tt> property is present in a <tt>"resume"</tt> packet, along with <tt>"resumeLimit"</tt>, <tt>"pauseOnExceptions"</tt> or <tt>"pauseOnDOMEvents"</tt>, it will take precedence and cause them to be ignored.
+If a <tt>"forceCompletion"</tt> property is present in a <tt>"resume"</tt> packet, along with <tt>"resumeLimit"</tt>, <tt>"pauseOnExceptions"</tt> or <tt>"pauseOnDOMEvents"</tt>, the thread will respond with an error:
+
+  { "from":<i>thread</i>, "error":"badParameterType", "message":<i>message</i> }
 
 A <tt>"resume"</tt> packet closes the pause actor the client provided in the "paused" packet that began the pause.
 
