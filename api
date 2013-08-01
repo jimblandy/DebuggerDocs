@@ -441,7 +441,7 @@ If the program resumed the generator by calling its <code>send</code> method and
 The functions described below may only be called with a <code>this</code> value referring to a <code>Debugger.Frame</code> instance; they may not be used as methods of other kinds of objects.
 
 <dl>
-<dt><a name="Debugger.Frame.prototype.eval>eval(<i>code</i>, [<i>options</i>])</a>
+<dt>{{anchor|Debugger.Frame.prototype.eval}}eval(<i>code</i>, [<i>options</i>])
 <dd>Evaluate <i>code</i> in the execution context of this frame, and return a [[#Completion_Values|completion value]] describing how it completed. <i>Code</i> is a string. If this frame's <code>environment</code> property is <code>null</code>, throw a <code>TypeError</code>. All extant handler methods, breakpoints, watchpoints, and so on remain active during the call. This function follows the [[#Invocation_Functions_and_.22debugger.22_Frames|invocation function conventions]].
 
 <i>Code</i> is interpreted as strict mode code when it contains a Use Strict Directive, or the code executing in this frame is strict mode code.
@@ -461,7 +461,7 @@ This method allows debugger code to introduce temporary bindings that are visibl
 
 Note that, like <code>eval</code>, declarations in the <i>code</i> passed to <code>evalWithBindings</code> affect the environment of this frame, even as that environment is extended by bindings visible within <i>code</i>. (In the terms used by the ECMAScript specification, the <code>VariableEnvironment</code> of the execution context for the eval code is the <code>VariableEnvironment</code> of the execution context that this frame represents, and the <i>bindings</i> appear in a new declarative environment, which is the eval code's <code>LexicalEnvironment</code>.) If implementation restrictions prevent SpiderMonkey from extending this frame's environment as requested, this call throws an <code>Error</code> exception.
 
-The <i>options</i> argument is as for <a href="#Debugger.Frame.prototype.eval"><code>Debugger.Frame.prototype.eval</code></a>, described above.
+The <i>options</i> argument is as for [[#Debugger.Frame.prototype.eval|<code>Debugger.Frame.prototype.eval</code>]], described above.
 
 <dt>pop(<i>completion</i>) <i>(future plan)</i>
 <dd>Pop this frame (and any younger frames) from the stack as if this frame had completed as specified by the completion value <i>completion</i>.
@@ -802,7 +802,7 @@ As [[#Debugger_Object|described above]], each <code>Debugger.Object</code> insta
 
 If <i>code</i> is not strict mode code, then variable declarations in <i>code</i> affect the referent global object. (In the terms used by the ECMAScript specification, the <code>VariableEnvironment</code> of the execution context for the eval code is the referent.)
 
-The <i>options</i> argument is as for <a href="#Debugger.Frame.prototype.eval"><code>Debugger.Frame.prototype.eval</code></a>, described above.
+The <i>options</i> argument is as for [[#Debugger.Frame.prototype.eval|<code>Debugger.Frame.prototype.eval</code>]], described above.
 
 <dt>evalInGlobalWithBindings(<i>code</i>, <i>bindings</i>, [<i>options</i>])
 <dd>Like <code>evalInGlobal</code>, but evaluate <i>code</i> using the referent as the variable object, but with a lexical environment extended with bindings from the object <i>bindings</i>. For each own enumerable property of <i>bindings</i> named <i>name</i> whose value is <i>value</i>, include a variable in the lexical environment in which <i>code</i> is evaluated named <i>name</i>, whose value is <i>value</i>. Each <i>value</i> must be a debuggee value. (This is not like a <code>with</code> statement: <i>code</i> may access, assign to, and delete the introduced bindings without having any effect on the <i>bindings</i> object.)
@@ -811,7 +811,7 @@ This method allows debugger code to introduce temporary bindings that are visibl
 
 Note that, like <code>evalInGlobal</code>, if the code passed to <code>evalInGlobalWithBindings</code> is not strict mode code, then any declarations it contains affect the referent global object, even as <i>code</i> is evaluated in an environment extended according to <i>bindings</i>. (In the terms used by the ECMAScript specification, the <code>VariableEnvironment</code> of the execution context for non-strict eval code is the referent, and the <i>bindings</i> appear in a new declarative environment, which is the eval code's <code>LexicalEnvironment</code>.)
 
-The <i>options</i> argument is as for <a href="#Debugger.Frame.prototype.eval"><code>Debugger.Frame.prototype.eval</code></a>, described above.
+The <i>options</i> argument is as for [[#Debugger.Frame.prototype.eval|<code>Debugger.Frame.prototype.eval</code>]], described above.
 
 <dt>asEnvironment()
 <dd>If the referent is a global object, return the <code>Debugger.Environment</code> instance representing the referent as a variable environment for evaluating code. If the referent is not a global object, throw a <code>TypeError</code>.
