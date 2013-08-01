@@ -224,7 +224,7 @@ The functions described below may only be called with a <code>this</code> value 
 
 <dl>
 <dt>addDebuggee(<i>global</i>)
-<dd>Add the global object designated by <i>global</i> to the set of global objects this <code>Debugger</code> instance is debugging. Return this <code>Debugger</code>'s <code>Debugger.Object</code> instance referring to <i>global</i>'s referent.
+<dd>Add the global object designated by <i>global</i> to the set of global objects this <code>Debugger</code> instance is debugging. If the designated global is already a debuggee, this has no effect. Return this <code>Debugger</code>'s <code>Debugger.Object</code> instance referring to <i>global</i>'s referent.
 
 The value <i>global</i> may be any of the following:
 <ul>
@@ -547,6 +547,11 @@ should be set in <code>g</code>'s script, not in <code>f</code>'s, even though n
 
 <dt>strictMode
 <dd>This is <code>true</code> if this script's code is ECMAScript strict mode code, and <code>false</code> otherwise.
+
+<dt>sourceMapURL
+<dd>If this script was produced by a minimizer or translated from some other language, and we know the URL of a <b>source map</b> document relating the source positions in this script to the corresponding source positions in the original source, then this property's value is that URL. Otherwise, this is <code>null</code>.
+
+(On the web, the translator may provide the source map URL in a specially formatted comment in the JavaScript source code, or via a header in the HTTP reply that carried the generated JavaScript.)
 </dl>
 
 === Function Properties of the Debugger.Script Prototype Object ===
@@ -844,6 +849,11 @@ The new watchpoint belongs to the <code>Debugger</code> instance to which this <
 
 <dt>unwrap()
 <dd>If the referent is a wrapper that this <code>Debugger.Object</code>'s compartment is permitted to unwrap, return a <code>Debugger.Object</code> instance referring to the wrapped object. If we are not permitted to unwrap the referent, return <code>null</code>. If the referent is not a wrapper, return this <code>Debugger.Object</code> instance unchanged.
+
+<dt>unsafeDereference()
+<dd>Return the referent of this <code>Debugger.Object</code> instance.
+
+This method pierces the membrane of <code>Debugger.Object</code> instances meant to protect debugger code from debuggee code, and allows debugger code to access debuggee objects through the standard cross-compartment wrappers, rather than via <code>Debugger.Object</code>'s reflection-oriented interfaces. This method makes it easier to gradually adapt large code bases to this Debugger API: adapted portions of the code can use <code>Debugger.Object</code> instances, but use this method to pass direct object references to code that has not yet been updated.
 </dl>
 
 == Debugger.Environment ==
