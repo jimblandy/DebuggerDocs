@@ -849,7 +849,13 @@ The response packet has the form:
 
 Where each <i>sourceForm</i> has the following form:
 
-  { actor: <i>sourceActorID</i>, url: <i>sourceURL</i> }
+  { actor: <i>sourceActorID</i>,
+    url: <i>sourceURL</i>,
+    isBlackBoxed: <i>isBlackBoxed</i> }
+
+* <i>sourceActorID</i> is the source actor's id
+* <i>sourceURL</i> is the URL of the source represented by the source actor
+* <i>isBlackBoxed</i> is a boolean specifying whether the source is black boxed. See [[#Black_Boxing_Sources|Black Boxing Sources]].
 
 Each source actor exists throughout the thread's whole lifetime.
 
@@ -877,7 +883,11 @@ The thread replies as follows:
 
 where each <i>frame</i> has the form:
 
-  { "actor":<i>actor</i>, "depth":<i>depth</i>, "type":<i>type</i>, "this":<i>this</i>, ... }
+  { "actor": <i>actor</i>,
+    "depth": <i>depth</i>,
+    "type": <i>type</i>,
+    "this": <i>this</i>,
+    ... }
 
 where:
 
@@ -894,13 +904,19 @@ All actors mentioned in the frame or grips appearing in the frame (<i>actor</i>,
 
 A frame for global code has the form:
 
-  { "actor":<i>actor</i>, "depth":<i>depth</i>, "type":"global", "this":<i>this</i>,
-    "where":<i>location</i>, "environment":<i>environment</i> }
+  { "actor":<i>actor</i>,
+    "depth":<i>depth</i>,
+    "type":"global",
+    "this":<i>this</i>,
+    "where":<i>location</i>,
+    "source":<i>source</i>,
+    "environment":<i>environment</i> }
 
 where:
 
 * <i>location</i> is the source location of the current point of execution in the global code (see [[#Source_Locations|Source Locations]]);
 * <i>environment</i> is a value representing the lexical environment of the current point of execution (see [[#Lexical_Environments|Lexical Environments]]);
+* <i>source</i> is the source form described in [[#Loading_Script_Sources|Loading Script Sources]]
 
 and other properties are as above.
 
@@ -1131,6 +1147,36 @@ This closes communications with <i>breakpointActor</i>.
 = Frame Pop Watches =
 
 <i>TODO: DOM node inspection, highlighting</i>
+
+= Black Boxing Sources=
+
+When a source a is black boxed, the debugger will not pause when it hits breakpoints or debugger statements inside that source. If pausing on exceptions is enabled and an exception is thrown inside a black boxed source, the debugger will not pause until the stack has unwound to a frame in a source that is not black boxed.
+
+Note: Requesting a list of frames or sources from the thread actor, still receives black boxed sources and their frames, but they are marked as black boxed. This way, the client (and its front end) have all the information they need to implement any UI on top of this feature.
+
+To black box a source:
+
+  { "to": <i>sourceActor</i>, "type": "blackbox" }
+
+The <i>sourceActor</i> responds with a blank response on success:
+
+  { "from": <i>sourceActor</i> }
+
+Or an error response on failure:
+
+  { "from": <i>sourceActor</i>, "error": <i>reason</i> }
+
+To un-black box a source:
+
+  { "to": <i>sourceActor</i>, "type": "unblackbox" }
+
+And once again, the <i>sourceActor</i> responds with a blank response on success:
+
+  { "from": <i>sourceActor</i> }
+
+Or an error response on failure:
+
+  { "from": <i>sourceActor</i>, "error": <i>reason</i> }
 
 <!-- Local Variables: -->
 <!-- eval: (visual-line-mode) -->
