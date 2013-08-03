@@ -329,23 +329,6 @@ Descriptors for accessor properties have the form:
 
 where <i>get</i> and <i>set</i> are grips on the property's getter and setter functions; either or both are omitted if the property lacks the given accessor function. <i>Configurable</i> and <i>enumerable</i> are as described above.
 
-=== Finding properties of multiple objects ===
-
-You can save on roundtrips to the server and query properties of multiple objects at the same time by sending a request to the thread actor:
-
-  { "to":<i>threadActor</i>, "type":"prototypesAndProperties",
-    "actors":[<i>gripActor1</i>, <i>gripActor2</i>, ...] }
-
-The actor will respond with a mapping of actor names to properties and prototypes:
-
-  { "from":<i>threadActor</i>,
-    "actors":{ <i>gripActor1</i>: {"prototype":..., "ownProperties":..., ...},
-               <i>gripActor2</i>: {"prototype":..., "ownProperties":..., ...}
-             }
-  }
-
-Essentially, the returned data will be the same as is the case with [[#Finding_An_Object's_Prototype_And_Properties|"prototypeAndProperties"]].
-
 <i>TODO: assign to value property</i>
 
 <i>TODO: special stuff for arrays</i>
@@ -849,7 +832,13 @@ The response packet has the form:
 
 Where each <i>sourceForm</i> has the following form:
 
-  { actor: <i>sourceActorID</i>, url: <i>sourceURL</i> }
+  { actor: <i>sourceActorID</i>,
+    url: <i>sourceURL</i>,
+    isBlackBoxed: <i>isBlackBoxed</i> }
+
+* <i>sourceActorID</i> is the source actor's id
+* <i>sourceURL</i> is the URL of the source represented by the source actor
+* <i>isBlackBoxed</i> is a boolean specifying whether the source actor's 'black-boxed' flag is set. See [[#Black_Boxing_Sources|Black Boxing Sources]].
 
 Each source actor exists throughout the thread's whole lifetime.
 
@@ -862,6 +851,38 @@ And the source actor replies with a packet of the following form:
   { from: <i>sourceActorID</i>, source: <i>contentsOfSource</i> }
 
 where <i>contentsOfSource</i> is a grip representing the string of source code: either a JSON string, or a long string grip. (See [[#Grips|Grips]] for a description of long string grips.)
+
+=== Black-Boxing Sources ===
+
+When debugging a web application that uses large off-the-shelf JavaScript libraries, it may help the developer focus on their own code to treat such libraries as "black boxes", whose internal details are omitted or simplified in the user interface. For example, the user interface could display a sub-chain of stack frames within a black-boxed library as a single element; breakpoints set in a black-boxed library could be disabled; and so on.
+
+Each source actor has a 'black-boxed' flag, and understands requests to set and clear the flag. When a source actor is black-boxed, the debugger does not pause when it hits breakpoints or <code>debugger</code> statements inside that source. If pausing on exceptions is enabled and an exception is thrown inside a black-boxed source, the debugger does not pause until the stack has unwound to a frame in a source that is not black-boxed.
+
+Thread actors still list black-boxed source actors in <code>"sources"</code> replies; and include stack frames running black-boxed code in <code>"frames"</code> requests. However, each <i>sourceForm</i> includes an <code>"isBlackBoxed"</code> property, giving the client all the information it needs to implement the black-boxing behavior in the user interface.
+
+To set a source actor's 'black-boxed' flag:
+
+  { "to": <i>sourceActor</i>, "type": "blackbox" }
+
+The <i>sourceActor</i> responds with a blank response on success:
+
+  { "from": <i>sourceActor</i> }
+
+Or an error response on failure:
+
+  { "from": <i>sourceActor</i>, "error": <i>reason</i> }
+
+To clear a source actor's 'black-boxed' flag:
+
+  { "to": <i>sourceActor</i>, "type": "unblackbox" }
+
+And once again, the <i>sourceActor</i> responds with a blank response on success:
+
+  { "from": <i>sourceActor</i> }
+
+Or an error response on failure:
+
+  { "from": <i>sourceActor</i>, "error": <i>reason</i> }
 
 == Listing Stack Frames ==
 
@@ -877,7 +898,11 @@ The thread replies as follows:
 
 where each <i>frame</i> has the form:
 
-  { "actor":<i>actor</i>, "depth":<i>depth</i>, "type":<i>type</i>, "this":<i>this</i>, ... }
+  { "actor": <i>actor</i>,
+    "depth": <i>depth</i>,
+    "type": <i>type</i>,
+    "this": <i>this</i>,
+    ... }
 
 where:
 
@@ -894,13 +919,19 @@ All actors mentioned in the frame or grips appearing in the frame (<i>actor</i>,
 
 A frame for global code has the form:
 
-  { "actor":<i>actor</i>, "depth":<i>depth</i>, "type":"global", "this":<i>this</i>,
-    "where":<i>location</i>, "environment":<i>environment</i> }
+  { "actor":<i>actor</i>,
+    "depth":<i>depth</i>,
+    "type":"global",
+    "this":<i>this</i>,
+    "where":<i>location</i>,
+    "source":<i>source</i>,
+    "environment":<i>environment</i> }
 
 where:
 
 * <i>location</i> is the source location of the current point of execution in the global code (see [[#Source_Locations|Source Locations]]);
 * <i>environment</i> is a value representing the lexical environment of the current point of execution (see [[#Lexical_Environments|Lexical Environments]]);
+* <i>source</i> is a source form as described in [[#Loading_Script_Sources|Loading Script Sources]]
 
 and other properties are as above.
 
