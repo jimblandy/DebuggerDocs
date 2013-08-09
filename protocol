@@ -125,6 +125,22 @@ This represents the JavaScript <tt>null</tt> value. (The protocol does not repre
 
 This represents the JavaScript <tt>undefined</tt> value. (<tt>undefined</tt> has no direct representation in JSON.)
 
+  { "type":"Infinity" }
+
+This represents the JavaScript <tt>Infinity</tt> value. (<tt>Infinity</tt> has no direct representation in JSON.)
+
+  { "type":"-Infinity" }
+
+This represents the JavaScript <tt>-Infinity</tt> value. (<tt>-Infinity</tt> has no direct representation in JSON.)
+
+  { "type":"NaN" }
+
+This represents the JavaScript <tt>NaN</tt> value. (<tt>NaN</tt> has no direct representation in JSON.)
+
+  { "type":"-0" }
+
+This represents the JavaScript <tt>-0</tt> value. (<tt>-0</tt> stringifies to JSON as 0.)
+
   { "type":"object", "class":<i>className</i>, "actor":<i>actor</i> }
 
 This represents a JavaScript object whose class is <i>className</i>. (Arrays and functions are treated as objects for the sake of forming grips.) <i>Actor</i> can be consulted for the object's contents, as explained below.
