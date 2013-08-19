@@ -864,9 +864,11 @@ To get the contents of a source, send the corresponding source actor the followi
 
 And the source actor replies with a packet of the following form:
 
-  { from: <i>sourceActorID</i>, source: <i>contentsOfSource</i> }
+  { from: <i>sourceActorID</i>,
+    source: <i>contentsOfSource</i>,
+    contentType: <i>contentType</i> }
 
-where <i>contentsOfSource</i> is a grip representing the string of source code: either a JSON string, or a long string grip. (See [[#Grips|Grips]] for a description of long string grips.)
+where <i>contentType</i> is an [http://en.wikipedia.org/wiki/Internet_media_type Internet media type], and <i>contentsOfSource</i> is a grip representing the string of source code: either a JSON string, or a long string grip. (See [[#Grips|Grips]] for a description of long string grips.)
 
 === Black-Boxing Sources ===
 
