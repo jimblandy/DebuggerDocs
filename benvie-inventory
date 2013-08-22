@@ -1,0 +1,52 @@
+see also [debugger-docs-needed] whiteboard tag
+
+I just did an inventory comparing what's actually implemented to what DebuggerDocs claims. There's a handful of undocumented things, a number of things that are unimplemented but not noted as so, and one discrepancy. We should try to keep the docs as close as possible to the implementation.
+
+Debugger
+undocumented
+* removeAllDebuggees
+* addAllGlobalsAsDebuggees
+unimplemented
+* onThrow
+* onError
+* findScriptURLs
+* clearBreakpoint
+* clearAllWatchpoints
+
+
+Debugger.Frame
+unimplemented
+* onResume
+* get depth
+* pop
+* replaceCall
+
+
+Debugger.Script
+undocumented
+* get source
+* get sourceStart
+* get sourceLength
+unimplemented
+* get strictMode
+* decompile
+discrepencies
+* clearBreakpoint <-> clearBreakpoints
+
+
+Debugger.Object
+unimplemented
+* get proxyHandler
+* get proxyCallTrap
+* get proxyConstructTrap
+* get hostAnnotations
+* getProperty
+* setProperty
+* copy
+* create
+* decompile
+* asEnvironment
+* setObjectWatchpoint
+* clearObjectWatchpoint
+* setPropertyWatchPoint
+* clearPropertyWatchpoint
