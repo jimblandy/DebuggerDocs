@@ -2,7 +2,7 @@
 
 The <code>Debugger</code> constructor makes objects with methods for debugging code running in global objects in other compartments. Given a <code>Debugger</code> instance, you can:
 <ul>
-<li>add debuggee global objects to its purview using its <code>addDebuggee</code> method;
+<li>add debuggee global objects to its purview using its [[#Debugger.prototype.addDebuggee|<code>addDebuggee</code>]] method;
 <li>request notification of basic debugging events like stack frame entry and <code>debugger</code> statement execution by providing appropriate handler functions;
 <li>set breakpoints in scripts;
 <li>set watchpoints on objects and their properties;
@@ -52,7 +52,8 @@ In the descriptions below, the term "debuggee value" means either a primitive va
 Each <code>Debugger</code> instance maintains a set of global objects that, taken together, comprise the debuggee. Code evaluated in the scope of a debuggee global object, directly or indirectly, is considered <i>debuggee code</i>. Similarly:
 <ul>
 <li>a <i>debuggee frame</i> is a frame running debuggee code;
-<li>a <i>debuggee function</i> is a function that closes over a debuggee global object (and thus the function's code is debuggee code); and
+<li>a <i>debuggee function</i> is a function that closes over a debuggee global object (and thus the function's code is debuggee code);
+<li>a <i>debuggee environment</i> is an environment whose outermost enclosing environment is a debuggee global object; and
 <li>a <i>debuggee script</i> is a script containing debuggee code.
 </ul>
 
@@ -118,7 +119,7 @@ When called as a constructor, the <code>Debugger</code> object creates a new <co
 
 <dl>
 <dt>new Debugger([<i>global</i>, ...])
-<dd>Create a debugger object, and apply its <code>addDebuggee</code> method to each of the given <i>global</i> objects to add them as the initial debuggees.
+<dd>Create a debugger object, and apply its [[#Debugger.prototype.addDebuggee|<code>addDebuggee</code>]] method to each of the given <i>global</i> objects to add them as the initial debuggees.
 </dl>
 
 === Accessor Properties of the Debugger Prototype Object ===
@@ -223,8 +224,8 @@ This handler method is only available to debuggers running in privileged code ("
 The functions described below may only be called with a <code>this</code> value referring to a <code>Debugger</code> instance; they may not be used as methods of other kinds of objects.
 
 <dl>
-<dt>addDebuggee(<i>global</i>)
-<dd>Add the global object designated by <i>global</i> to the set of global objects this <code>Debugger</code> instance is debugging. If the designated global is already a debuggee, this has no effect. Return this <code>Debugger</code>'s <code>Debugger.Object</code> instance referring to <i>global</i>'s referent.
+<dt>{{anchor|Debugger.prototype.addDebuggee}}addDebuggee(<i>global</i>)
+<dd>Add the global object designated by <i>global</i> to the set of global objects this <code>Debugger</code> instance is debugging. If the designated global is already a debuggee, this has no effect. Return this <code>Debugger</code>'s <code>Debugger.Object</code> instance referring to the designated global.
 
 The value <i>global</i> may be any of the following:
 <ul>
@@ -244,12 +245,12 @@ The <code>Debugger</code> instance does not hold a strong reference to its debug
 <dt>removeDebuggee(<i>global</i>)
 <dd>Remove the global object designated by <i>global</i> from this <code>Debugger</code> instance's set of debuggees. Return <code>undefined</code>.
 
-This method interprets <i>global</i> using the same rules that <code>addDebuggee</code> does.
+This method interprets <i>global</i> using the same rules that [[#Debugger.prototype.addDebuggee|<code>addDebuggee</code>]] does.
 
 <dt>hasDebuggee(<i>global</i>)
 <dd>Return <code>true</code> if the global object designated by <i>global</i> is a debuggee of this <code>Debugger</code> instance.
 
-This method interprets <i>global</i> using the same rules that <code>addDebuggee</code> does.
+This method interprets <i>global</i> using the same rules that [[#Debugger.prototype.addDebuggee|<code>addDebuggee</code>]] does.
 
 <dt>getDebuggees()
 <dd>Return an array of distinct <code>Debugger.Object</code> instances whose referents are all the global objects this <code>Debugger</code> instance is debugging.
@@ -305,6 +306,9 @@ Note that the result may include <code>Debugger.Script</code> instances for scri
 The results of this call can be affected in non-deterministic ways by the details of the JavaScript implementation. The array may include <code>Debugger.Object</code> instances referring to global objects that are not actually reachable by the debuggee or any other code in the system. (Naturally, once the function has returned, the array's <code>Debugger.Object</code> instances strongly reference the globals they refer to.)
 
 This handler method is only available to debuggers running in privileged code ("chrome", in Firefox). Most functions provided by this <code>Debugger</code> API observe activity in only those globals that are reachable by the API's user, thus imposing capability-based restrictions on a <code>Debugger</code>'s reach. However, <code>findAllGlobals</code> allows the API user to find all global objects anywhere within the JavaScript system (the "JSRuntime", in SpiderMonkey terms), thereby escaping the capability-based limits. For this reason, <code>findAllGlobals</code> is only available to privileged code.
+
+<dt>makeGlobalObjectReference(<i>global</i>)
+<dd>Return the <code>Debugger.Object</code> whose referent is the global object designated by <i>global</i>, without adding the designated global as a debuggee. If <i>global</i> does not designate a global object, throw a <code>TypeError</code>. Determine which global is designated by <i>global</i> using the same rules as [[#Debugger.prototype.addDebuggee|<code>Debugger.prototype.addDebuggee</code>]].
 </dl>
 
 == Debugger.Frame ==
@@ -681,7 +685,7 @@ Note that the display name may not be a proper JavaScript identifier, or even a 
   var s = f(function () {});  // display name: s<
 
 <dt>parameterNames
-<dd>If the referent is a function, the names of the its parameters, as an array of strings. If the referent is not a function at all, this is <code>undefined</code>.
+<dd>If the referent is a debuggee function, the names of the its parameters, as an array of strings. If the referent is not a debuggee function, or not a function at all, this is <code>undefined</code>.
 
 If the referent is a host function for which parameter names are not available, return an array with one element per parameter, each of which is <code>undefined</code>.
 
@@ -865,6 +869,8 @@ The new watchpoint belongs to the <code>Debugger</code> instance to which this <
 <dt>unsafeDereference()
 <dd>Return the referent of this <code>Debugger.Object</code> instance.
 
+If the referent is an inner object (say, an HTML5 <code>Window</code> object), return the corresponding outer object (say, the HTML5 <code>WindowProxy</code> object). This makes <code>unsafeDereference</code> more useful in producing values appropriate for direct use by debuggee code, without using [[#Invocation_Functions_and_.22debugger.22_Frames|invocation functions]].
+
 This method pierces the membrane of <code>Debugger.Object</code> instances meant to protect debugger code from debuggee code, and allows debugger code to access debuggee objects through the standard cross-compartment wrappers, rather than via <code>Debugger.Object</code>'s reflection-oriented interfaces. This method makes it easier to gradually adapt large code bases to this Debugger API: adapted portions of the code can use <code>Debugger.Object</code> instances, but use this method to pass direct object references to code that has not yet been updated.
 </dl>
 
@@ -880,6 +886,8 @@ SpiderMonkey creates exactly one <code>Debugger.Environment</code> instance for 
 
 (If more than one <code>Debugger</code> instance is debugging the same code, each <code>Debugger</code> gets a separate <code>Debugger.Environment</code> instance for a given environment. This allows the code using each <code>Debugger</code> instance to place whatever properties it likes on its own <code>Debugger.Object</code> instances, without worrying about interfering with other debuggers.)
 
+If a <code>Debugger.Environment</code> instance's referent is not a debuggee environment, then attempting to access its properties (other than <code>inspectable</code>) or call any its methods throws an instance of <code>Error</code>.
+
 <code>Debugger.Environment</code> instances protect their referents from the garbage collector; as long as the <code>Debugger.Environment</code> instance is live, the referent remains live. Garbage collection has no visible effect on <code>Debugger.Environment</code> instances.
 
 === Accessor Properties of the Debugger.Environment Prototype Object ===
@@ -887,6 +895,9 @@ SpiderMonkey creates exactly one <code>Debugger.Environment</code> instance for 
 A <code>Debugger.Environment</code> instance inherits the following accessor properties from its prototype:
 
 <dl>
+<dt>inspectable
+<dd>True if this environment is a debuggee environment, and can therefore be inspected. False otherwise. All other properties and methods of <code>Debugger.Environment</code> instances throw if applied to a non-inspectable environment.
+
 <dt>type
 <dd>The type of this environment object, one of the following values:
 <ul>
