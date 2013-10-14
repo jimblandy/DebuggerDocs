@@ -64,7 +64,7 @@ When a debuggee stack frame completes its execution, or when some sort of debugg
 <dt>{ return: <i>value</i> }
 <dd>The code completed normally, returning <i>value</i>. <i>Value</i> is a debuggee value.
 <dt>{ yield: <i>value</i> }
-<dd>The running code is a generator frame which has yielded <i>value</i>. <i>Value</i> is a debuggee value.
+<dd><i>(Not yet implemented.)</i> The running code is a generator frame which has yielded <i>value</i>. <i>Value</i> is a debuggee value.
 <dt>{ throw: <i>value</i> }
 <dd>The code threw <i>value</i> as an exception. <i>Value</i> is a debuggee value.
 <dt>null
@@ -82,7 +82,7 @@ As the debuggee runs, the <code>Debugger</code> interface calls various debugger
 <dt>{ return: <i>value</i> }
 <dd>Return <i>value</i> immediately as the current value of the function. <i>Value</i> must be a debuggee value. (Most handler functions support this, except those whose descriptions say otherwise.) If the function was called as a constructor (that is, via a <code>new</code> expression), then <i>value</i> serves as the value returned by the function's body, not that produced by the <code>new</code> expression: if the value is not an object, the <code>new</code> expression returns the frame's <code>this</code> value.
 <dt>{ yield: <i>value</i> }
-<dd>Yield <i>value</i> immediately as the next value of the current frame, which must be a generator frame. <i>Value</i> is a debuggee value. The current frame must be a generator frame that has not yet completed in some other way. You may use <code>yield</code> resumption values to substitute a new value or one already yielded by a generator, or to make a generator yield additional values.
+<dd><i>(Not yet implemented.)</i> Yield <i>value</i> immediately as the next value of the current frame, which must be a generator frame. <i>Value</i> is a debuggee value. The current frame must be a generator frame that has not yet completed in some other way. You may use <code>yield</code> resumption values to substitute a new value or one already yielded by a generator, or to make a generator yield additional values.
 <dt>{ throw: <i>value</i> }
 <dd>Throw <i>value</i> as an execption from the current bytecode instruction. <i>Value</i> must be a debuggee value.
 <dt>null
@@ -428,7 +428,7 @@ When a debugger handler function forces a frame to complete early, by returning 
 
 When SpiderMonkey calls an <code>onPop</code> handler for a frame that is throwing an exception or being terminated, and the handler returns <code>undefined</code>, then SpiderMonkey proceeds with the exception or termination. That is, an <code>undefined</code> resumption value leaves the frame's throwing and termination process undisturbed.
 
-When a generator frame yields a value, SpiderMonkey calls its <code>Debugger.Frame</code> instance's <code>onPop</code> handler method, if present, passing a <code>yield</code> resumption value; however, the <code>Debugger.Frame</code> instance remains live.
+<i>(Not yet implemented.)</i> When a generator frame yields a value, SpiderMonkey calls its <code>Debugger.Frame</code> instance's <code>onPop</code> handler method, if present, passing a <code>yield</code> resumption value; however, the <code>Debugger.Frame</code> instance remains live.
 
 If multiple <code>Debugger</code> instances each have <code>Debugger.Frame</code> instances for a given stack frame with <code>onPop</code> handlers set, their handlers are run in an unspecified order. The resumption value each handler returns establishes the completion value reported to the next handler.
 
@@ -486,6 +486,8 @@ Like <code>pop</code>, this cannot remove <code>"call"</code> frames for calls t
 </dl>
 
 === Generator Frames ===
+
+<i>Not all behavior described in this section has been implemented yet.</i>
 
 SpiderMonkey supports generator-iterator objects, which produce a series of values by repeatedly suspending the execution of a function or expression. For example, calling a function that uses <code>yield</code> produces a generator-iterator object, as does evaluating a generator expression like <code>(i*i for each (i in [1,2,3]))</code>.
 
