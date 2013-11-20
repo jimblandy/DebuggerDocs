@@ -944,6 +944,8 @@ The methods described below may only be called with a <code>this</code> value re
 <dt>getVariable(<i>name</i>)
 <dd>Return the value of the variable bound to <i>name</i> in this environment, or <code>undefined</code> if this environment does not bind <i>name</i>. <i>Name</i> must be a string that is a valid ECMAScript identifier name. The result is a debuggee value.
 
+JavaScript engines often omit variables from environments, to save space and reduce execution time. If the given variable should be in scope, but <code>getVariable</code> is unable to produce its value, it returns an ordinary JavaScript object (not a <code>Debugger.Object</code> instance) whose <code>optimizedOut</code> property is <code>true</code>.
+
 This is not an [[#Invocation_Functions_and_.22debugger.22_Frames|invocation function]]; if this call would cause debuggee code to run (say, because the environment is a <code>"with"</code> environment, and <i>name</i> refers to an accessor property of the <code>with</code> statement's operand), this call throws a [[#The_Debugger.DebuggeeWouldRun_Exception|<code>Debugger.DebuggeeWouldRun</code>]] exception.
 
 <dt>setVariable(<i>name</i>, <i>value</i>)
