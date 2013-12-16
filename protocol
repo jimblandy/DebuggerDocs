@@ -538,9 +538,9 @@ To attach to a <i>tabActor</i>, a client sends a message of the form:
 
 The tab actor replies:
 
-  { "from":<i>tabActor</i>, "type":"tabAttached", "threadActor":<i>tabThreadActor</i> }
+  { "from":<i>tabActor</i>, "type":"tabAttached", "threadActor":<i>tabThreadActor</i>, "cacheEnabled":<i>true</i> ,"javascriptEnabled":<i>true</i> }
 
-where <i>tabThreadActor</i> is the name of a thread-like actor representing the tab's current content. If the user navigates the tab, <i>tabThreadActor</i> switches to the new content; we do not create a separate thread-like actor each page the tab visits.
+where <i>tabThreadActor</i> is the name of a thread-like actor representing the tab's current content. If the user navigates the tab, <i>tabThreadActor</i> switches to the new content; we do not create a separate thread-like actor each page the tab visits. <i>cacheEnabled</i> and <i>javascriptEnabled</i> indicate whether the browser cache and content JavaScript are allowed for the tab.
 
 If the user closes the tab before the client attaches to it, <i>tabActor</i> replies:
 
