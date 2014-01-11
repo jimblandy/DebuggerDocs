@@ -553,6 +553,9 @@ A <code>Debugger.Script</code> instance inherits the following accessor properti
 <dt>sourceLength
 <dd>The length, in characters, of this script's code within the <code>Debugger.Source</code> instance given by <code>source</code>.
 
+<dt>global
+<dd>A <code>Debugger.Object</code> instance referring to the global object in whose scope this script runs. The result refers to the global directly, not via a wrapper or a <code>WindowProxy</code> ("outer window", in Firefox).
+
 <dt>staticLevel
 <dd>The number of function bodies enclosing this script's code.
 
@@ -1043,30 +1046,29 @@ A <code>Debugger.Source</code> instance inherits the following accessor properti
 <dt>elementProperty <i>(not yet implemented)</i>
 <dd>If this source belongs to a DOM element because it is an event handler content attribute or an event handler IDL attribute, this is the name of that attribute, a string. Otherwise, this is <code>undefined</code>.
 
+<dt>introductionType <i>(not yet implemented)</i>
+<dd>A string indicating how this source code was introduced into the system. This accessor returns one of the following values:
+<ul>
+<li><code>"eval"</code>, for code passed to <code>eval</code>.
+<li><code>"Function"</code>, for code passed to the <code>Function</code> constructor.
+<li><code>"Worker"</code>, for code loaded by calling the Web worker constructor&mdash;the worker's main script.
+<li><code>"importScripts"</code>, for code by calling <code>importScripts</code> in a web worker.
+<li><code>"handler"</code>, for code assigned to DOM elements' event handler IDL attributes.
+<li><code>"scriptElement"</code>, for code belonging to <code>&lt;script&gt;</code> elements.
+<li><code>undefined</code>, if the implementation doesn't know how the code was introduced.
+</ul>
+
 <dt>introductionScript <i>(not yet implemented)</i>
-<dd>If this source was passed to an <i>introduction call</i> in debuggee code, this is the <code>Debugger.Script</code> instance referring to the script containing that call. Otherwise, this is <code>undefined</code>. (Taken together with the <code>introductionScriptOffset</code> property, one can determine the call's source and position within that source of the call.)
-
-An introduction call is a function call (or assignment to a setter property) that introduces new JavaScript code to the system. This is one of the following:
-<ul>
-<li>A call to <code>eval</code>.
-<li>A call to the <code>Function</code> constructor.
-<li>A call to the <code>Worker</code> web worker constructor or the <code>importScripts</code> function, which expect a script URL.
-<li>An assignment to an event handler IDL attribute of a DOM element.
-</ul>
-
 <dt>introductionScriptOffset <i>(not yet implemented)</i>
-<dd>If <code>introductionScript</code> is a script, this is the bytecode offset within that script of the introduction call.
+<dd>If this source was introduced by calling a function from debuggee code, then <code>introductionScript</code> is the <code>Debugger.Script</code> instance referring to the script containing that call, and <code>introductionScriptOffset</code> is the call's bytecode offset within that script. Otherwise, these are both <code>undefined</code>. Taken together, these properties indicate the location of the introducing call.
 
-<dt>introductionKind <i>(not yet implemented)</i>
-<dd>A string indicating what kind of introduction call introduced this <code>Debugger.Source</code>'s code into the system. This is <code>undefined</code> if <code>introductionScript</code> is undefined; otherwise, it is one of the following strings:
-<ul>
-<li><code>"eval"</code>
-<li><code>"Function"</code>
-<li><code>"Worker"</code>
-<li><code>"importScripts"</code>
-<li><code>"handler"</code> (for DOM elements' event handler IDL attributes)
-</ul>
+For the purposes of these accessors, assignments to accessor properties are treated as function calls. Thus, setting a DOM element's event handler IDL attribute by assigning to the corresponding JavaScript property creates a source whose <code>introductionScript</code> and <code>introductionScriptOffset</code> refer to the property assignment.
 
+Since a <code>&lt;script&gt;</code> element parsed from a web page's original HTML was not introduced by any scripted call, its source's <code>introductionScript</code> and <code>introductionScriptOffset</code> accessors both return <code>undefined</code>.
+
+If a <code>&lt;script&gt;</code> element was dynamically inserted into a document, then these accessors refer to the call that actually caused the script to run&mdash;usually the call that made the element part of the document. Thus, they do <i>not</i> refer to the call that created the element; stored the source as the element's text child; made the element a child of some uninserted parent node that was later inserted; or the like.
+
+Although the main script of a worker thread is introduced by a call to <code>Worker</code> or <code>SharedWorker</code>, these accessors always return <code>undefined</code> on such script's sources. A worker's main script source and the call that created the worker are always in separate threads, but <code>Debugger</code> is an inherently single-threaded facility: its debuggees must all run in the same thread. Since the global that created the worker is in a different thread, it is guaranteed not to be a debuggee of the <code>Debugger</code> instance that owns this source; and thus the creating call is never "in debuggee code". Relating a worker to its creator, and other multi-threaded debugging concerns, are out of scope for <code>Debugger</code>.
 </dl>
 
 === Function Properties of the Debugger.Source Prototype Object ===
