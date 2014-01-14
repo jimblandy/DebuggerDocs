@@ -1,3 +1,5 @@
+<i>This transport is implemented in Firefox, and is the basis of Firefox's built-in JavaScript debugger. You can use the [https://github.com/jimblandy/DebuggerDocs GitHub DebuggerDocs repo] to draft and discuss revisions.</i>
+
 The [[Remote_Debugging_Protocol|Mozilla debugging protocol]] is specified in terms of packets exchanged between a client and server, where each packet is either a JSON text or a block of bytes (a "bulk data" packet). The protocol does not specify any particular mechanism for carrying packets from one party to the other. Implementations may choose whatever transport they like, as long as packets arrive reliably, undamaged, and in order.
 
 This page describes the <b>Mozilla Remote Debugging Protocol Stream Transport</b>, a transport layer suitable for carrying Mozilla debugging protocol packets over a reliable, ordered byte stream, like a TCP/IP stream or a pipe. Debugger user interfaces can use it to exchange packets with debuggees in other processes (say, for debugging Firefox chrome code), or on other machines (say, for debugging Firefox OS apps running on a phone or tablet).
@@ -22,19 +24,22 @@ where <i>length</i> is a series of decimal ASCII digits, <i>JSON</i> is a well-f
 
 A bulk data packet has the form:
 
-  bulk <i>actor</i> <i>length</i>:<i>data</i>
+  bulk <i>actor</i> <i>type</i> <i>length</i>:<i>data</i>
 
 where:
 <ul>
-<li>The keyword <code>bulk</code> is encoded in ASCII, and the spaces are always exactly one ASCII space.
-<li><i>actor</i> is a sequence of Unicode characters, encoded in UTF-8, containing no spaces or colons;
-<li><i>length</i> is a sequence of decimal ASCII digits; and
-<li><i>data</i> is a sequence of bytes whose length is <i>length</i> interpreted as a number.
+<li>The keyword <code>bulk</code> is encoded in ASCII, and the spaces are always exactly one ASCII space
+<li><i>actor</i> is a sequence of Unicode characters, encoded in UTF-8, containing no spaces
+<li><i>type</i> is a sequence of Unicode characters, encoded in UTF-8, containing no spaces
+<li><i>length</i> is a sequence of decimal ASCII digits
+<li><i>data</i> is a sequence of bytes whose length is <i>length</i> interpreted as a number
 </ul>
 
 The <i>actor</i> field is the name of the actor sending or receiving the packet. (Actors are server-side entities, so if the packet was sent by the client, <i>actor</i> names the recipient; and if the packet was sent by the server, <i>actor</i> names the sender.) The protocol imposes the same syntactic restrictions on actor names that we require here.
 
 Which actor names are valid at any given point in an exchange is established by the remote debugging protocol.
+
+The <i>type</i> field defines the type of the packet, which may be used with the actor name to route the packet to its destination properly. The protocol provides more detail about the <i>type</i>, which remains in effect here.
 
 The content of a bulk data packet is exactly the sequence of bytes appearing as <i>data</i>. <i>Data</i> is not UTF-8 text.
 
@@ -53,9 +58,9 @@ TCP/IP streams and USB streams meet these requirements.
 
 === Constant-Overhead Bulk Data ===
 
-Mozilla added bulk data packets to the protocol to let devices with limited memory upload performance profiling data more efficiently. Profiling data sets need to be as large as possible, as larger data sets can cover a longer period of time or more frequent samples. However, converting a large data set to a JavaScript object, converting that object to a JSON text, and sending the text over the connection entails making several temporary complete copies of the data; on small devices, this limits how much data the profiler can collect. Avoiding these temporary copies would allow small devices to collect and transmit larger profile data sets. Since it seemed likely that other sorts of tools would need to exchange large binary blocks efficiently as well, we wanted a solution usable by all protocol participants, rather than one tailored to the profiler's specific case.
+Mozilla added bulk data packets to the protocol to let devices with limited memory upload performance profiling and other large data sets more efficiently. Profiling data sets need to be as large as possible, as larger data sets can cover a longer period of time or more frequent samples. However, converting a large data set to a JavaScript object, converting that object to a JSON text, and sending the text over the connection entails making several temporary complete copies of the data; on small devices, this limits how much data the profiler can collect. Avoiding these temporary copies would allow small devices to collect and transmit larger profile data sets. Since it seemed likely that other sorts of tools would need to exchange large binary blocks efficiently as well, we wanted a solution usable by all protocol participants, rather than one tailored to the profiler's specific case.
 
-In our implementation of this Stream Transport, when a participant wishes to transmit a bulk data packet, it provides the actor name, the data's length in bytes, and a callback function. When the underyling stream is ready to send more data, the transport writes the packet's <code>bulk <i>actor</i> <i>length</i>:</code> header, and then passes the underlying <code>nsIOutputStream</code> to the callback, which then writes the packet's <i>data</i> portion directly to the stream. Similarly, when a participant receives a bulk data packet, the transport parses the header, and then passes the actor name and the transport's underlying <code>nsIInputStream</code> to a callback function, which consumes the data directly. Thus, while the callback functions may well use fixed-size buffers to send and receive data, the transport imposes no overhead proportional to the full size of the data.
+In our implementation of this Stream Transport, when a participant wishes to transmit a bulk data packet, it provides the actor name, the type, the data's length in bytes, and a callback function. When the underlying stream is ready to send more data, the transport writes the packet's <code>bulk <i>actor</i> <i>type</i> <i>length</i>:</code> header, and then passes the underlying <code>nsIOutputStream</code> to the callback, which then writes the packet's <i>data</i> portion directly to the stream. Similarly, when a participant receives a bulk data packet, the transport parses the header, and then passes the actor name, type, and the transport's underlying <code>nsIInputStream</code> to a callback function, which consumes the data directly. Thus, while the callback functions may well use fixed-size buffers to send and receive data, the transport imposes no overhead proportional to the full size of the data.
 
 <!-- Local Variables: -->
 <!-- eval: (visual-line-mode) -->
