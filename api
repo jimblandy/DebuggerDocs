@@ -461,6 +461,8 @@ If given, <i>options</i> should be an object whose properties specify details of
 <dl>
 <dt>url
 <dd>The filename or URL to which we should attribute <i>code</i>. If this property is omitted, the URL defaults to <code>"debugger eval code"</code>.
+<dt>lineNumber
+<dd>The line number at which the evaluated code should be claimed to begin within <i>url</i>.
 </dl>
 
 <dt>evalWithBindings(<i>code</i>, <i>bindings</i>, [<i>options</i>])
