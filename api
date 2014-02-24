@@ -1055,8 +1055,11 @@ A <code>Debugger.Source</code> instance inherits the following accessor properti
 <li><code>"Function"</code>, for code passed to the <code>Function</code> constructor.
 <li><code>"Worker"</code>, for code loaded by calling the Web worker constructor&mdash;the worker's main script.
 <li><code>"importScripts"</code>, for code by calling <code>importScripts</code> in a web worker.
-<li><code>"handler"</code>, for code assigned to DOM elements' event handler IDL attributes.
+<li><code>"eventHandler"</code>, for code assigned to DOM elements' event handler IDL attributes as a string.
 <li><code>"scriptElement"</code>, for code belonging to <code>&lt;script&gt;</code> elements.
+<li><code>"javascriptURL"</code>, for code presented in <code>javascript:</code> URLs.
+<li><code>"setTimeout"</code>, for code passed to <code>setTimeout</code> as a string.
+<li><code>"setInterval"</code>, for code passed to <code>setInterval</code> as a string.
 <li><code>undefined</code>, if the implementation doesn't know how the code was introduced.
 </ul>
 
