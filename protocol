@@ -887,11 +887,15 @@ Where each <i>sourceForm</i> has the following form:
 
   { actor: <i>sourceActorID</i>,
     url: <i>sourceURL</i>,
-    isBlackBoxed: <i>isBlackBoxed</i> }
+    isBlackBoxed: <i>isBlackBoxed</i>,
+    addonID: <i>addonID</i>,
+    addonPath: <i>addonPath</i> }
 
 * <i>sourceActorID</i> is the source actor's id
 * <i>sourceURL</i> is the URL of the source represented by the source actor
 * <i>isBlackBoxed</i> is a boolean specifying whether the source actor's 'black-boxed' flag is set. See [[#Black_Boxing_Sources|Black Boxing Sources]].
+* <i>addonID</i> is the ID of the add-on that the source comes from, if known
+* <i>addonPath</i> is the path to the source in the add-on's XPI, if known
 
 Each source actor exists throughout the thread's whole lifetime.
 
