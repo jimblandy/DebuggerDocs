@@ -1,3 +1,6 @@
 As of 2014-4-2 and Mozilla Central changeset 7f56669bdfdf, the official
 documentation for the Debugger API is in js/src/doc/Debugger. Proposals and
 fixes should go through the usual Bugzilla patch review process.
+
+Those pages appear on the Mozilla Developer Network site at:
+https://developer.mozilla.org/en-US/docs/Tools/Debugger-API
