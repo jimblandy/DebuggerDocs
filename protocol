@@ -1,4 +1,4 @@
-<i>(Note: this page is a draft design of work not yet completed. It is written in the present tense to be easily promoted to documentation when implemented, and also to simplify the grammar. You can use the [https://github.com/jimblandy/DebuggerDocs GitHub DebuggerDocs repo] to draft and discuss revisions.)</i>
+<i>This protocol is implemented in Firefox, and is the basis of Firefox's built-in JavaScript debugger. You can use the [https://github.com/jimblandy/DebuggerDocs GitHub DebuggerDocs repo] to draft and discuss revisions.)</i>
 
 The Mozilla debugging protocol allows a debugger to connect to a browser, discover what sorts of things are present to debug or inspect, select JavaScript threads to watch, and observe and modify their execution. The protocol provides a unified view of JavaScript, DOM nodes, CSS rules, and the other technologies used in client-side web applications. The protocol ought to be sufficiently general to be extended for use with other sorts of clients (profilers, say) and servers (mail readers; random XULrunner applications).
 
@@ -52,15 +52,36 @@ where <i>actor</i> is the name of the non-existent actor. (It is strange to rece
 
 Clients should silently ignore packet properties they do not recognize. We expect that, as the protocol evolves, we will specify new properties that can appear in existing packets, and experimental implementations will do the same.
 
-== Requests and Replies ==
+== Common Patterns of Actor Communication ==
 
-In this protocol description, a <b>request</b> is a packet sent from the client which always elicits a single packet from the recipient, the <b>reply</b>. These terms indicate a simple pattern of communication: at any given time, either the client or actor is permitted to send a packet to the other, but never both.
+Each type of actor specifies which packets it can receive, which it might send, and when it can do each. Although in principle these interaction rules could be complex, in practice most actors follow one of two simple patterns:
 
-The client's communication with each actor is treated separately: the client may send a request to one actor, and then send a request to a different actor before receiving a reply from the first.
+<ul>
+<li><b>Request/Reply</b>: Each packet sent to the actor ("request") elicits a single packet in response ("reply").
+<li><b>Request/Reply/Notify</b>: Like Request/Reply, but the actor may send packets that are not in response to any specific request ("notification"), perhaps announcing events that occur spontaneously in the debuggee.
+</ul>
 
-Packets not described as requests or replies are part of some more complicated interaction, which should be spelled out in more detail.
+These patterns are described in more detail below.
 
-Any actor can reply to a request it is unable to carry out with an <b>error reply</b> of the form:
+Some actors require more complicated rules. For example, the set of packets accepted by a [[#Interacting_with_Thread-Like_Actors|Thread-like actor]] depends on which one of four states it occupies. The actor may spontaneously transition from one state to another, and not all state transitions produce notification packets. Actors like this require careful specification.
+
+=== The Request/Reply Pattern ===
+
+In this specification, if we call a packet a <b>request</b>, then it is a packet sent by the client, which always elicits a single packet from the actor in return, the <b>reply</b>. These terms indicate a simple pattern of communication: the actor processes packets in the order they are received, and the client can trust that the <i>i</i>'th reply corresponds to the <i>i</i>'th request.
+
+An [[#Error_Packets|error reply]] packet from a request/reply actor constitutes a reply.
+
+Note that it is correct for a client to send several requests to a request/reply actor without waiting for a reply to each request before sending the next; requests can be pipelined. However, as the pending requests consume memory, the client should ensure that only a bounded number of requests are outstanding at any one time.
+
+=== The Request/Reply/Notify Pattern ===
+
+Some actors follow the request/reply pattern, but may also send the client <b>notification</b> packets, not in reply to any particular request. For example, if the client sends the root actor a [[#Listing_Browser_Tabs|<code>"listTabs"</code>]] request, then the root actor sends a reply. However, since the client has now expressed an interest in the list of open tabs, the root actor may subsequently send the client a <code>"tabListChanged"</code> notification packet, indicating that the client should re-fetch the list of tabs if it is interested in the latest state.
+
+There should be a small upper bound on the number of notification packets any actor may send between packets received from the client, to ensure that the actor does not flood the client. In the example above, the root actor sends at most one <code>"tabListChanged"</code> notification after each <code>"listTabs"</code> request.
+
+=== Error Packets ===
+
+Any actor can reply to a packet it is unable to process with an <b>error reply</b> of the form:
 
   { "from":<i>actor</i>, "error":<i>name</i>, "message":<i>message</i> }
 
@@ -104,6 +125,22 @@ This represents the JavaScript <tt>null</tt> value. (The protocol does not repre
 
 This represents the JavaScript <tt>undefined</tt> value. (<tt>undefined</tt> has no direct representation in JSON.)
 
+  { "type":"Infinity" }
+
+This represents the JavaScript <tt>Infinity</tt> value. (<tt>Infinity</tt> has no direct representation in JSON.)
+
+  { "type":"-Infinity" }
+
+This represents the JavaScript <tt>-Infinity</tt> value. (<tt>-Infinity</tt> has no direct representation in JSON.)
+
+  { "type":"NaN" }
+
+This represents the JavaScript <tt>NaN</tt> value. (<tt>NaN</tt> has no direct representation in JSON.)
+
+  { "type":"-0" }
+
+This represents the JavaScript <tt>-0</tt> value. (<tt>-0</tt> stringifies to JSON as 0.)
+
   { "type":"object", "class":<i>className</i>, "actor":<i>actor</i> }
 
 This represents a JavaScript object whose class is <i>className</i>. (Arrays and functions are treated as objects for the sake of forming grips.) <i>Actor</i> can be consulted for the object's contents, as explained below.
@@ -112,7 +149,8 @@ If the class is "Function", the grip may have additional properties:
 
   { "type":"object", "class":"Function", "actor":<i>actor</i>,
     "name":<i>name</i>, "displayName":<i>displayName</i>,
-    "userDisplayName":<i>userDisplayName</i> }
+    "userDisplayName":<i>userDisplayName</i>,
+    "url":<i>url</i>, "line":<i>line</i>, "column":<i>column</i> }
 
 These additional properties are:
 <dl>
@@ -122,6 +160,12 @@ These additional properties are:
 <dd>A name the system has inferred for the function (say, <code>"Foo.method"</code>). If the function has a given name (appearing in the grip as the <code>"name"</code> property), or if the system was unable to infer a suitable name for it, the <code>displayName</code> property is omitted.
 <dt><i>userDisplayName</i>
 <dd>If the function object has a <code>"displayName"</code> value property whose value is a string, this is that property's value. (Many JavaScript development tools consult such properties, to give developers a way to provide their own meaningful names for functions.)
+<dt><i>url</i>
+<dd>The URL of the function's source location (see [[#Source_Locations|Source Locations]]);
+<dt><i>line</i>
+<dd>The line number of the function's source location (see [[#Source_Locations|Source Locations]]);
+<dt><i>column</i>
+<dd>The column number of the function's source location (see [[#Source_Locations|Source Locations]]);
 </dl>
 
   { "type":"longString", "initial":<i>initial</i>, "length":<i>length</i>, "actor":<i>actor</i> }
@@ -183,6 +227,13 @@ A descriptor for an accessor property has the form:
 
 where <i>getter</i> and <i>setter</i> are grips on the property's getter and setter functions. These may be <tt>{&nbsp;"type":"undefined"&nbsp;}</tt> if the property lacks the given accessor function.
 
+A <b>safe getter value descriptor</b> provides a value that an inherited accessor returned when applied to an instance. (See [[#Finding_An_Object's_Prototype_And_Properties|Finding An Object's Prototype And Properties]] for an explanation of why and when such descriptors are used.) Such a descriptor has the form:
+
+  { "getterValue": <i>value</i>, "getterPrototypeLevel": <i>level</i>,
+    "enumerable":<i>enumerable</i>, "writable":<i>writable</i> }
+
+where <i>value</i> is a grip on the value the getter returned, <i>level</i> is the number of steps up the object's prototype chain one must take to find the object on which the getter appears as an own property. If the getter appears directly on the object, <i>level</i> is zero. The <i>writable</i> property is true if the inherited accessor has a setter, and false otherwise.
+
 For example, if the JavaScript program being debugged evaluates the expression:
 
   ({x:10, y:"kaiju", get a() { return 42; }})
@@ -195,12 +246,28 @@ and sending a [[#Finding_An_Object's_Prototype_And_Properties|"prototypeAndPrope
 
   { "from":<i>actor</i>, "prototype":{ "type":"object", "class":"Object", "actor":<i>objprotoActor</i> },
     "ownProperties":{ "x":{ "enumerable":true, "configurable":true, "writeable":true, "value":10 },
-                       "y":{ "enumerable":true, "configurable":true, "writeable":true, "value":"kaiju" },
-                       "a":{ "enumerable":true, "configurable":true,
-                             "get":{ "type":"object", "class":"Function", "actor":<i>getterActor</i> },
-                             "set":{ "type":"undefined" }
-                           }
+                      "y":{ "enumerable":true, "configurable":true, "writeable":true, "value":"kaiju" },
+                      "a":{ "enumerable":true, "configurable":true,
+                            "get":{ "type":"object", "class":"Function", "actor":<i>getterActor</i> },
+                            "set":{ "type":"undefined" }
+                          }
                      }
+  }
+
+Sending a [[#Finding_An_Object's_Prototype_And_Properties|"prototypeAndProperties"]] request to an object actor referring to a DOM mouse event might produce the following reply:
+
+  { "from":<i>mouseEventActor</i>, "prototype":{ "type":"object", "class":"MouseEvent", "actor":<i>mouseEventProtoActor</i> },
+    "ownProperties":{ }
+    "safeGetterValues":{ "screenX": { "getterValue": 1000, "getterPrototypeLevel": 1,
+                                      "enumerable": true, "writable": false },
+                         "screenY": { "getterValue": 1000, "getterPrototypeLevel": 1,
+                                      "enumerable": true, "writable": false },
+                         "clientX": { "getterValue": 800,  "getterPrototypeLevel": 1,
+                                      "enumerable": true, "writable": false },
+                         "clientY": { "getterValue": 800,  "getterPrototypeLevel": 1,
+                                      "enumerable": true, "writable": false },
+                         <i>...</i>
+                       }
   }
 
 ==== Finding An Object's Prototype And Properties ====
@@ -218,6 +285,14 @@ where <i>prototype</i> is a grip on the object's prototype (possibly <tt>{&nbsp;
   { <i>name</i>:<i>descriptor</i>, ... }
 
 with a <i>name</i>:<i>descriptor</i> pair for each of the object's own properties.
+
+The web makes extensive use of inherited accessor properties; for example, the <code>clientX</code> and <code>clientY</code> properties of a mouse click event are actually accessor properties which the event object inherits from its prototype chain. It can be very valuable to display such properties' values directly on the object (taking care to distinguish them from true "own" properties), if the server can determine that the getters can be called without side effects.
+
+To this end, when possible, the server may provide safe getter value descriptors for an object, as described in [[#Property_Descriptors|Property Descriptors]] above, reporting the values that getter functions found on the object's prototype chain return when applied to that object. If the server chooses to provide any, the reply includes a <code>"safeGetterValues"</code> property of the form:
+
+  { <i>name</i>:<i>descriptor</i>, ... }
+
+with a <i>name</i>:<i>descriptor</i> pair for each safe getter the object inherits from its prototype chain, or that appears directly on the object. Each <i>descriptor</i> here is a safe getter value descriptor.
 
 <i>TODO: What about objects with many properties?</i>
 
@@ -493,7 +568,7 @@ If the client was not already attached to <i>tabActor</i>, <i>tabActor</i> sends
 
   { "from":<i>tabActor</i>, "error":"wrongState" }
 
-While the client is attached, <i>tabActor</i> sends unsolicited notifications to the client whenever the user navigates the tab to a new page. When navigation begins, <i>tabActor</i> sends a packet of the form:
+While the client is attached, <i>tabActor</i> sends notifications to the client whenever the user navigates the tab to a new page. When navigation begins, <i>tabActor</i> sends a packet of the form:
 
   { "from":<i>tabActor</i>, "type":"tabNavigated", "state":"start",
     "url":<i>newURL</i> }
@@ -503,9 +578,9 @@ This indicates that the tab has begun navigating to <i>newURL</i>; JavaScript ex
   { "from":<i>tabActor</i>, "type":"tabNavigated", "state":"stop",
      "url":<i>newURL</i>, "title":<i>newTitle</i> }
 
-where <i>newURL</i> and <i>newTitle</i> are the URL and title of the page the tab is now showing. The <i>tabThreadActor</i> given in the response to the original <code>"attach"</code> request is now debugging the new page's code.
+where <i>newURL</i> and <i>newTitle</i> are the URL and title of the page the tab is now showing. The <i>tabThreadActor</i> given in the response to the original <code>"attach"</code> packet is now debugging the new page's code.
 
-If the user closes a tab to which the client is attached, its <i>tabActor</i> sends an unsolicited packet of the form:
+If the user closes a tab to which the client is attached, its <i>tabActor</i> sends a notification packet of the form:
 
   { "from":<i>tabActor</i>, "type":"tabDetached" }
 
@@ -656,6 +731,10 @@ The thread stopped at the watchpoints represented by the given actors.
 
 The expression given in the client's prior <tt>clientEvaluate</tt> command has completed execution; <i>completion</i> is a [[#Completion_Values|completion value]] describing how it completed. The frame created for the <tt>clientEvaluate</tt> resumption has been popped from the stack. See [[#Evaluating_Source-Language_Expressions|Evaluating Source-Language Expressions]] for details.
 
+  { "type":"pauseOnDOMEvents" }
+
+The client resumed the thread with a <tt>"resume"</tt> packet that included a <tt>pauseOnDOMEvents</tt> property, and the thread stopped because it executed an event in that list.
+
 == Resuming a Thread ==
 
 If a thread is in the <b>Paused</b> state, the client can resume it by sending a packet of the following form:
@@ -708,7 +787,33 @@ To force the current frame to end execution immediately, the client can send a p
 
 where <i>completion</i> is a [[#Completion_Values|completion value]] indicating whether the frame should return a value, throw an exception, or be terminated. Execution resumes in the current frame's caller, in the manner appropriate for <i>completion</i>.
 
-A <tt>"resume"</tt> packet may not include both a <tt>"resumeLimit"</tt> property and a <tt>"forceCompletion"</tt> property.
+To request that execution pause when an exception is thrown, the client may send a request of the form:
+
+  { "to":<i>thread</i>, "type":"resume", "pauseOnExceptions": true }
+
+If <tt>pauseOnExceptions</tt> has the value <tt>false</tt> or is omitted, execution will continue in the face of thrown exceptions. When a thread pauses because an exception was thrown, the "paused" packet's <i>reason</i> will have the following form:
+
+  { "type":"exception", "exception":<i>exception</li> }
+
+where <i>exception</i> is a grip on the exception object.
+
+To request that execution pause on a DOM event, the client may send a request of the form:
+
+  { "to":<i>thread</i>, "type":"resume", "pauseOnDOMEvents": [<i>event-type</i>, ... ] }
+
+The <tt>pauseOnDOMEvents</tt> property contains an array of the types of DOM events that should pause execution. Execution pauses immediately after the frame for the call to the listener has been pushed, and before the listener has begun execution.
+
+A request to pause on all kinds of events can be made using the "*" wildcard event type:
+
+  { "to":<i>thread</i>, "type":"resume", "pauseOnDOMEvents": "*" }
+
+A <tt>pauseOnDOMEvents</tt> applies only until the next pause. In order to change the types of events that should pause execution, a new array of event types should be sent to the server. Any events not present in the new list will no longer trigger pauses. Consequently, sending an empty array or simply omitting the <tt>pauseOnDOMEvents</tt> property disables pausing on DOM events.
+
+When a thread pauses because a DOM event was triggered, the "paused" packet's <i>reason</i> will have a type of <tt>"pauseOnDOMEvents"</tt>.
+
+If a <tt>"forceCompletion"</tt> property is present in a <tt>"resume"</tt> packet, along with <tt>"resumeLimit"</tt>, <tt>"pauseOnExceptions"</tt> or <tt>"pauseOnDOMEvents"</tt>, the thread will respond with an error:
+
+  { "from":<i>thread</i>, "error":"badParameterType", "message":<i>message</i> }
 
 A <tt>"resume"</tt> packet closes the pause actor the client provided in the "paused" packet that began the pause.
 
@@ -782,30 +887,65 @@ where <i>message</i> is text that could be displayed to users explaining why the
 
 To get a snapshot of all sources currently loaded by the thread actor, the client can send the following packet:
 
-  { to: <i>threadActorID</i>,
-    type: "sources" }
+  { to: <i>threadActorID</i>, type: "sources" }
 
-The response packet has the following form:
+The response packet has the form:
 
-  { from: <i>threadActorID</i>,
-    sources: [<i>sourceForm1</i>, <i>sourceForm2</i>, ..., <i>sourceFormN</i>] }
+  { from: <i>threadActorID</i>, sources: [<i>sourceForm1</i>, <i>sourceForm2</i>, ..., <i>sourceFormN</i>] }
 
 Where each <i>sourceForm</i> has the following form:
 
   { actor: <i>sourceActorID</i>,
-    url: <i>sourceURL</i> }
+    url: <i>sourceURL</i>,
+    isBlackBoxed: <i>isBlackBoxed</i> }
+
+* <i>sourceActorID</i> is the source actor's id
+* <i>sourceURL</i> is the URL of the source represented by the source actor
+* <i>isBlackBoxed</i> is a boolean specifying whether the source actor's 'black-boxed' flag is set. See [[#Black_Boxing_Sources|Black Boxing Sources]].
 
 Each source actor exists throughout the thread's whole lifetime.
 
 To get the contents of a source, send the corresponding source actor the following packet:
 
-  { to: <i>sourceActorID</i>,
-    type: "source" }
+  { to: <i>sourceActorID</i>, type: "source" }
 
 And the source actor replies with a packet of the following form:
 
-  { from: <i>sourceActorID</i>,
-    source: <i>contentsOfSource</i> }
+  { from: <i>sourceActorID</i>, source: <i>contentsOfSource</i> }
+
+where <i>contentsOfSource</i> is a grip representing the string of source code: either a JSON string, or a long string grip. (See [[#Grips|Grips]] for a description of long string grips.)
+
+=== Black-Boxing Sources ===
+
+When debugging a web application that uses large off-the-shelf JavaScript libraries, it may help the developer focus on their own code to treat such libraries as "black boxes", whose internal details are omitted or simplified in the user interface. For example, the user interface could display a sub-chain of stack frames within a black-boxed library as a single element; breakpoints set in a black-boxed library could be disabled; and so on.
+
+Each source actor has a 'black-boxed' flag, and understands requests to set and clear the flag. When a source actor is black-boxed, the debugger does not pause when it hits breakpoints or <code>debugger</code> statements inside that source. If pausing on exceptions is enabled and an exception is thrown inside a black-boxed source, the debugger does not pause until the stack has unwound to a frame in a source that is not black-boxed.
+
+Thread actors still list black-boxed source actors in <code>"sources"</code> replies; and include stack frames running black-boxed code in <code>"frames"</code> requests. However, each <i>sourceForm</i> includes an <code>"isBlackBoxed"</code> property, giving the client all the information it needs to implement the black-boxing behavior in the user interface.
+
+To set a source actor's 'black-boxed' flag:
+
+  { "to": <i>sourceActor</i>, "type": "blackbox" }
+
+The <i>sourceActor</i> responds with a blank response on success:
+
+  { "from": <i>sourceActor</i> }
+
+Or an error response on failure:
+
+  { "from": <i>sourceActor</i>, "error": <i>reason</i> }
+
+To clear a source actor's 'black-boxed' flag:
+
+  { "to": <i>sourceActor</i>, "type": "unblackbox" }
+
+And once again, the <i>sourceActor</i> responds with a blank response on success:
+
+  { "from": <i>sourceActor</i> }
+
+Or an error response on failure:
+
+  { "from": <i>sourceActor</i>, "error": <i>reason</i> }
 
 == Listing Stack Frames ==
 
@@ -821,7 +961,11 @@ The thread replies as follows:
 
 where each <i>frame</i> has the form:
 
-  { "actor":<i>actor</i>, "depth":<i>depth</i>, "type":<i>type</i>, "this":<i>this</i>, ... }
+  { "actor": <i>actor</i>,
+    "depth": <i>depth</i>,
+    "type": <i>type</i>,
+    "this": <i>this</i>,
+    ... }
 
 where:
 
@@ -838,13 +982,19 @@ All actors mentioned in the frame or grips appearing in the frame (<i>actor</i>,
 
 A frame for global code has the form:
 
-  { "actor":<i>actor</i>, "depth":<i>depth</i>, "type":"global", "this":<i>this</i>,
-    "where":<i>location</i>, "environment":<i>environment</i> }
+  { "actor":<i>actor</i>,
+    "depth":<i>depth</i>,
+    "type":"global",
+    "this":<i>this</i>,
+    "where":<i>location</i>,
+    "source":<i>source</i>,
+    "environment":<i>environment</i> }
 
 where:
 
 * <i>location</i> is the source location of the current point of execution in the global code (see [[#Source_Locations|Source Locations]]);
 * <i>environment</i> is a value representing the lexical environment of the current point of execution (see [[#Lexical_Environments|Lexical Environments]]);
+* <i>source</i> is a source form as described in [[#Loading_Script_Sources|Loading Script Sources]]
 
 and other properties are as above.
 
@@ -1070,6 +1220,46 @@ to which the breakpoint actor will reply, simply:
   { "from":<i>breakpointActor</i> }
 
 This closes communications with <i>breakpointActor</i>.
+
+= Event Listeners =
+
+To request a list of all the event listeners and event handlers (see [https://developer.mozilla.org/docs/Web/Guide/DOM/Events/Event_handlers#Definitions DOM Event Handlers] for definitions of the two terms) attached to the page, the client sends a request of the form:
+
+  { "to":<i>thread</i>, "type":"eventListeners" }
+
+The thread replies with a response of the form:
+
+  { "from":<i>thread</i>, "listeners":[ <i>listener</i>, ... ] }
+
+Such requests can be sent when the thread is either paused or running. A <i>listener</i> value has the form:
+
+  { "node":{ "selector":<i>node-selector</i>, "object":<i>node</i> },
+    "type":<i>type</i>,
+    "capturing":<i>capturing</i>,
+    "allowsUntrusted":<i>allowsUntrusted</i>,
+    "inSystemEventGroup":<i>inSystemEventGroup</i>,
+    "isEventHandler":<i>isEventHandler</i>,
+    "function":<i>function</i> }
+
+The values for these properties are:
+<dl>
+<dt><i>node-selector</i>
+<dd>A unique CSS selector of the DOM element on which the event handler is attached, or <code>"window"</code> if the handler is attached on the window.
+<dt><i>node</i>
+<dd>A grip on the DOM element on which the event handler is attached.
+<dt><i>type</i>
+<dd>The type of the DOM event as specified in the DOM specification (see [https://developer.mozilla.org/docs/XPCOM_Interface_Reference/nsIEventListenerInfo#Attributes nsIEventListenerInfo]).
+<dt><i>capturing</i>
+<dd>A boolean flag indicating whether the event listener is in capture mode (see [https://developer.mozilla.org/docs/XPCOM_Interface_Reference/nsIEventListenerInfo#Attributes nsIEventListenerInfo]).
+<dt><i>allowsUntrusted</i>
+<dd>A boolean flag that indicates whether the listener allows untrusted events (see [https://developer.mozilla.org/docs/XPCOM_Interface_Reference/nsIEventListenerInfo#Attributes nsIEventListenerInfo]).
+<dt><i>inSystemEventGroup</i>
+<dd>A boolean flag that indicates whether or not the event listener is in the system event group (see [https://developer.mozilla.org/docs/XPCOM_Interface_Reference/nsIEventListenerInfo#Attributes nsIEventListenerInfo]).
+<dt><i>isEventHandler</i>
+<dd>A boolean flag indicating whether this is an event handler or an event listener (see [https://developer.mozilla.org/docs/Web/Guide/DOM/Events/Event_handlers#Definitions DOM Event Handlers] for definitions of the two terms). For HTML attribute handlers or assignments to WebIDL properties this flag would be true.
+<dt><i>function</i>
+<dd>A grip on the function object.
+</dl>
 
 = Watchpoints =
 = Frame Pop Watches =
