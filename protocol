@@ -721,6 +721,10 @@ The thread stopped because it executed a JavaScript "debugger" statement.
 
 The thread stopped at the breakpoints represented by the given actors.
 
+  { "type": "breakpointConditionThrown", "actors": [<i>breakpointActor</i>...], "message": <i>thrown message</i> }
+
+The thread stopped at the breakpoints with conditions represented by the given actors, when the conditions evaluation throws.
+
   { "type":"watchpoint", "actors":[<i>watchpointActor</i>...] }
 
 The thread stopped at the watchpoints represented by the given actors.
