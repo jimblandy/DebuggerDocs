@@ -861,33 +861,7 @@ At this point, the thread can no longer be manipulated by the client, and most o
 
 This acknowledges the exit and allows the thread actor name, <i>thread</i>, to be reused for other actors.
 
-= Inspecting Paused Threads =
-
-When a thread is in the <b>Paused</b> state, the debugger can make requests to inspect its stack, lexical environment, and values.
-
-Only those packets explicitly defined to do so can cause the thread to resume execution. JavaScript features like getters, setters, and proxies, which could normally lead inspection operations like enumerating properties and examining their values to run arbitrary JavaScript code, are disabled while the thread is paused. If a given protocol request is not defined to let the thread run, but carrying out the requested operation would normally cause it to do so&mdash;say, fetching the value of a getter property&mdash;the actor sends an error reply of the form:
-
-  { "from":<i>actor</i>, "error":"threadWouldRun", "message":<i>message</i>, "cause":<i>cause</i> }
-
-where <i>message</i> is text that could be displayed to users explaining why the operation could not be carried out. <i>Cause</i> is one of the following strings:
-
-{| frame="box" rules="all" cellpadding="8"
-! <i>cause</i> value
-! meaning
-|-
-| "proxy"
-| Carrying out the operation would cause a proxy handler to run.
-|-
-| "getter"
-| Carrying out the operation would cause an object property getter to run.
-|-
-| "setter"
-| Carrying out the operation would cause an object property setter to run.
-|}
-
-(Taken together, the <tt>"threadWouldRun"</tt> error name and the <i>cause</i> value should allow the debugger to present an appropriately localized error message.)
-
-== Loading Script Sources ==
+== Listing Sources ==
 
 To get a snapshot of all sources currently loaded by the thread actor, the client can send the following packet:
 
@@ -913,49 +887,31 @@ Where each <i>sourceForm</i> has the following form:
 
 Each source actor exists throughout the thread's whole lifetime.
 
-To get the contents of a source, send the corresponding source actor the following packet:
+= Inspecting Paused Threads =
 
-  { to: <i>sourceActorID</i>, type: "source" }
+When a thread is in the <b>Paused</b> state, the debugger can make requests to inspect its stack, lexical environment, and values.
 
-And the source actor replies with a packet of the following form:
+Only those packets explicitly defined to do so can cause the thread to resume execution. JavaScript features like getters, setters, and proxies, which could normally lead inspection operations like enumerating properties and examining their values to run arbitrary JavaScript code, are disabled while the thread is paused. If a given protocol request is not defined to let the thread run, but carrying out the requested operation would normally cause it to do so&mdash;say, fetching the value of a getter property&mdash;the actor sends an error reply of the form:
 
-  { from: <i>sourceActorID</i>,
-    source: <i>contentsOfSource</i>,
-    contentType: <i>contentType</i> }
+  { "from":<i>actor</i>, "error":"threadWouldRun", "message":<i>message</i>, "cause":<i>cause</i> }
 
-where <i>contentType</i> is an [http://en.wikipedia.org/wiki/Internet_media_type Internet media type], and <i>contentsOfSource</i> is a grip representing the string of source code: either a JSON string, or a long string grip. (See [[#Grips|Grips]] for a description of long string grips.)
+where <i>message</i> is text that could be displayed to users explaining why the operation could not be carried out. <i>Cause</i> is one of the following strings:
 
-=== Black-Boxing Sources ===
+{| frame="box" rules="all" cellpadding="8"
+! <i>cause</i> value
+! meaning
+|-
+| "proxy"
+| Carrying out the operation would cause a proxy handler to run.
+|-
+| "getter"
+| Carrying out the operation would cause an object property getter to run.
+|-
+| "setter"
+| Carrying out the operation would cause an object property setter to run.
+|}
 
-When debugging a web application that uses large off-the-shelf JavaScript libraries, it may help the developer focus on their own code to treat such libraries as "black boxes", whose internal details are omitted or simplified in the user interface. For example, the user interface could display a sub-chain of stack frames within a black-boxed library as a single element; breakpoints set in a black-boxed library could be disabled; and so on.
-
-Each source actor has a 'black-boxed' flag, and understands requests to set and clear the flag. When a source actor is black-boxed, the debugger does not pause when it hits breakpoints or <code>debugger</code> statements inside that source. If pausing on exceptions is enabled and an exception is thrown inside a black-boxed source, the debugger does not pause until the stack has unwound to a frame in a source that is not black-boxed.
-
-Thread actors still list black-boxed source actors in <code>"sources"</code> replies; and include stack frames running black-boxed code in <code>"frames"</code> requests. However, each <i>sourceForm</i> includes an <code>"isBlackBoxed"</code> property, giving the client all the information it needs to implement the black-boxing behavior in the user interface.
-
-To set a source actor's 'black-boxed' flag:
-
-  { "to": <i>sourceActor</i>, "type": "blackbox" }
-
-The <i>sourceActor</i> responds with a blank response on success:
-
-  { "from": <i>sourceActor</i> }
-
-Or an error response on failure:
-
-  { "from": <i>sourceActor</i>, "error": <i>reason</i> }
-
-To clear a source actor's 'black-boxed' flag:
-
-  { "to": <i>sourceActor</i>, "type": "unblackbox" }
-
-And once again, the <i>sourceActor</i> responds with a blank response on success:
-
-  { "from": <i>sourceActor</i> }
-
-Or an error response on failure:
-
-  { "from": <i>sourceActor</i>, "error": <i>reason</i> }
+(Taken together, the <tt>"threadWouldRun"</tt> error name and the <i>cause</i> value should allow the debugger to present an appropriately localized error message.)
 
 == Listing Stack Frames ==
 
@@ -1275,6 +1231,66 @@ The values for these properties are:
 = Frame Pop Watches =
 
 <i>TODO: DOM node inspection, highlighting</i>
+
+= Interacting with Source Actors =
+
+== Loading Source Contents ==
+
+To get the contents of a source, send the corresponding source actor the following packet:
+
+  { to: <i>sourceActorID</i>, type: "source" }
+
+And the source actor replies with a packet of the following form:
+
+  { from: <i>sourceActorID</i>, source: <i>contentsOfSource</i> }
+
+where <i>contentType</i> is an [http://en.wikipedia.org/wiki/Internet_media_type Internet media type], and <i>contentsOfSource</i> is a grip representing the string of source code: either a JSON string, or a long string grip. (See [[#Grips|Grips]] for a description of long string grips.)
+
+== Black-Boxing Sources ==
+
+When debugging a web application that uses large off-the-shelf JavaScript libraries, it may help the developer focus on their own code to treat such libraries as "black boxes", whose internal details are omitted or simplified in the user interface. For example, the user interface could display a sub-chain of stack frames within a black-boxed library as a single element; breakpoints set in a black-boxed library could be disabled; and so on.
+
+Each source actor has a 'black-boxed' flag, and understands requests to set and clear the flag. When a source actor is black-boxed, the debugger does not pause when it hits breakpoints or <code>debugger</code> statements inside that source. If pausing on exceptions is enabled and an exception is thrown inside a black-boxed source, the debugger does not pause until the stack has unwound to a frame in a source that is not black-boxed.
+
+Thread actors still list black-boxed source actors in <code>"sources"</code> replies; and include stack frames running black-boxed code in <code>"frames"</code> requests. However, each <i>sourceForm</i> includes an <code>"isBlackBoxed"</code> property, giving the client all the information it needs to implement the black-boxing behavior in the user interface.
+
+To set a source actor's 'black-boxed' flag:
+
+  { "to": <i>sourceActor</i>, "type": "blackbox" }
+
+The <i>sourceActor</i> responds with a blank response on success:
+
+  { "from": <i>sourceActor</i> }
+
+Or an error response on failure:
+
+  { "from": <i>sourceActor</i>, "error": <i>reason</i> }
+
+To clear a source actor's 'black-boxed' flag:
+
+  { "to": <i>sourceActor</i>, "type": "unblackbox" }
+
+And once again, the <i>sourceActor</i> responds with a blank response on success:
+
+  { "from": <i>sourceActor</i> }
+
+Or an error response on failure:
+
+  { "from": <i>sourceActor</i>, "error": <i>reason</i> }
+
+== Pretty Printing ==
+
+A source may be told to pretty print its contents, and report pretty printed locations when we are debugging and stepping through the source. To do this, the client should send:
+
+  { "to": <i>sourceActor</i>,
+    "type": "prettyPrint",
+    "indent": <i>numberOfSpaces</i> }
+
+Where <i>sourceActor</i> is the source actor's ID, and <i>numberOfSpaces</i> is a positive integer representing how many spaces to indent new lines of code by.
+
+The source actor returns to the client the same packet form it returns for "source" requests, although the source content has been pretty printed:
+
+  { "from": <i>sourceActor</i>, "source": <i>prettyPrintedSourceContent</i> }
 
 <!-- Local Variables: -->
 <!-- eval: (visual-line-mode) -->
